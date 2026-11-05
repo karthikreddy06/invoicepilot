@@ -110,6 +110,108 @@ def test_webhook_invoice_cancelled(client_with_db):
         assert inv["status"] == "CANCELLED"
 
 
+def test_webhook_invoice_paid_nested_invoice_shape(client_with_db):
+    # Tests realistic PayPal Invoicing v2 webhook where resource has invoice.id
+    upsert_invoice(
+        paypal_invoice_id="INV2-NESTED-1234",
+        client_email="client@test.com",
+        description="Branding",
+        amount=750.0,
+        status="SENT",
+    )
+
+    with patch("app.main.verify_webhook_signature", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = True
+
+        webhook_payload = {
+            "id": "WH-EVENT-NESTED-1",
+            "event_type": "INVOICING.INVOICE.PAID",
+            "resource": {
+                "id": "NOTIF-PAYMENT-8888",
+                "invoice": {
+                    "id": "INV2-NESTED-1234",
+                    "status": "PAID",
+                    "payments": {
+                        "transactions": [{"payment_date": "2026-11-05T18:30:00Z"}]
+                    }
+                }
+            }
+        }
+
+        response = client_with_db.post("/webhooks/paypal", json=webhook_payload)
+        assert response.status_code == 200
+
+        inv = get_invoice_by_paypal_id("INV2-NESTED-1234")
+        assert inv["status"] == "PAID"
+        assert inv["paid_at"] == "2026-11-05T18:30:00Z"
+        assert inv["is_simulated"] == 0
+
+
+def test_webhook_invoice_paid_links_shape(client_with_db):
+    # Tests PayPal webhook where invoice ID is inside resource links/href
+    upsert_invoice(
+        paypal_invoice_id="INV2-LINKS-5678",
+        client_email="client@test.com",
+        description="Copywriting",
+        amount=320.0,
+        status="SENT",
+    )
+
+    with patch("app.main.verify_webhook_signature", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = True
+
+        webhook_payload = {
+            "id": "WH-EVENT-LINKS-2",
+            "event_type": "INVOICING.INVOICE.PAID",
+            "resource": {
+                "id": "TXN-9999",
+                "links": [
+                    {
+                        "href": "https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-LINKS-5678",
+                        "rel": "invoice",
+                        "method": "GET"
+                    }
+                ]
+            }
+        }
+
+        response = client_with_db.post("/webhooks/paypal", json=webhook_payload)
+        assert response.status_code == 200
+
+        inv = get_invoice_by_paypal_id("INV2-LINKS-5678")
+        assert inv["status"] == "PAID"
+        assert inv["is_simulated"] == 0
+
+
+def test_webhook_invoice_refunded(client_with_db):
+    upsert_invoice(
+        paypal_invoice_id="INV2-REFUND-1",
+        client_email="client@test.com",
+        description="Consulting",
+        amount=450.0,
+        status="PAID",
+    )
+
+    with patch("app.main.verify_webhook_signature", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = True
+
+        webhook_payload = {
+            "id": "WH-EVENT-REFUND-1",
+            "event_type": "INVOICING.INVOICE.REFUNDED",
+            "resource": {
+                "invoice": {
+                    "id": "INV2-REFUND-1"
+                }
+            }
+        }
+
+        response = client_with_db.post("/webhooks/paypal", json=webhook_payload)
+        assert response.status_code == 200
+
+        inv = get_invoice_by_paypal_id("INV2-REFUND-1")
+        assert inv["status"] == "REFUNDED"
+
+
 def test_dev_simulate_paid(client_with_db):
     upsert_invoice(
         paypal_invoice_id="INV2-SIM-1",

@@ -1,1 +1,1171 @@
-<!-- PayChase AI / InvoicePilot HTML placeholder -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayChase AI (InvoicePilot) — Agentic Commerce for Freelancers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --surface: #121824;
+      --surface-elevated: #1a2234;
+      --surface-border: #243048;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --paypal-blue: #0070ba;
+      --paypal-dark: #003087;
+      --paypal-accent: #00cfde;
+      --accent-gradient: linear-gradient(135deg, #0070ba 0%, #00cfde 100%);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --neutral: #64748b;
+      --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 64px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: var(--accent-gradient);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 112, 186, 0.4);
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-sandbox {
+      background: rgba(0, 112, 186, 0.15);
+      border: 1px solid rgba(0, 207, 222, 0.3);
+      color: #38bdf8;
+    }
+
+    .pill-demo {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Main Container (Split Screen) */
+    .app-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 64px);
+      overflow: hidden;
+    }
+
+    /* Left Panel: Chat */
+    .chat-panel {
+      flex: 1.1;
+      min-width: 380px;
+      max-width: 620px;
+      background: var(--surface);
+      border-right: 1px solid var(--surface-border);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .chat-header {
+      padding: 14px 20px;
+      background: rgba(18, 24, 36, 0.9);
+      border-bottom: 1px solid var(--surface-border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    .message-row {
+      display: flex;
+      gap: 12px;
+      max-width: 90%;
+    }
+
+    .message-row.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-row.agent {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .avatar-agent {
+      background: var(--accent-gradient);
+      color: white;
+    }
+
+    .avatar-user {
+      background: #334155;
+      color: #f1f5f9;
+    }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.5;
+      position: relative;
+      word-break: break-word;
+    }
+
+    .message-row.user .bubble {
+      background: #1e3a8a;
+      color: #eff6ff;
+      border-bottom-right-radius: 4px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .message-row.agent .bubble {
+      background: var(--surface-elevated);
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--surface-border);
+    }
+
+    .action-badge {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: rgba(0, 112, 186, 0.1);
+      border: 1px solid rgba(0, 207, 222, 0.2);
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #38bdf8;
+    }
+
+    /* Prompt Suggestions */
+    .suggestions {
+      padding: 10px 20px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      border-top: 1px solid var(--surface-border);
+      background: rgba(18, 24, 36, 0.5);
+    }
+
+    .suggestions::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip-btn {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .chip-btn:hover {
+      border-color: var(--paypal-blue);
+      color: var(--text-main);
+      background: rgba(0, 112, 186, 0.2);
+    }
+
+    /* Chat Input Form */
+    .chat-input-area {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--surface-border);
+    }
+
+    .chat-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text-main);
+      font-family: var(--font-main);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input:focus {
+      border-color: var(--paypal-blue);
+      box-shadow: 0 0 0 2px rgba(0, 112, 186, 0.25);
+    }
+
+    .btn-send {
+      background: var(--accent-gradient);
+      border: none;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-send:hover {
+      opacity: 0.92;
+    }
+
+    .btn-send:active {
+      transform: scale(0.98);
+    }
+
+    .btn-send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Right Panel: Invoice Dashboard */
+    .dashboard-panel {
+      flex: 2;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .dashboard-title h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .dashboard-title p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .dashboard-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-action {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-action:hover {
+      background: var(--surface-elevated);
+      border-color: var(--paypal-blue);
+    }
+
+    .btn-primary {
+      background: var(--paypal-blue);
+      border-color: var(--paypal-blue);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #005ea6;
+    }
+
+    /* KPI Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 16px 20px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 700;
+      margin-top: 6px;
+      color: var(--text-main);
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Table Container */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .table-top {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--surface-elevated);
+      color: var(--text-main);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text-main);
+    }
+
+    .invoice-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .invoice-table th {
+      background: rgba(18, 24, 36, 0.6);
+      padding: 12px 18px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .invoice-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--surface-border);
+      vertical-align: middle;
+    }
+
+    .invoice-table tr:hover td {
+      background: rgba(26, 34, 52, 0.4);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-sent {
+      background: rgba(0, 112, 186, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(0, 112, 186, 0.3);
+    }
+
+    .badge-paid {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-cancelled {
+      background: rgba(100, 116, 139, 0.15);
+      color: #94a3b8;
+      border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+
+    .badge-overdue {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .reminders-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .mono-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .mono-id:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+
+    .empty-state {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    /* Modal for reminder log */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 550px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .timeline-item {
+      padding: 12px 14px;
+      background: var(--surface-elevated);
+      border-left: 3px solid var(--paypal-blue);
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .timeline-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 2000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">P</div>
+      <div>
+        <div class="brand-title">InvoicePilot <span style="font-size: 13px; font-weight: 400; color: var(--text-muted);">(PayChase AI)</span></div>
+        <div class="brand-sub">PayPal AI Hackathon · Autonomous Freelancer Invoicing</div>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="pill pill-sandbox">
+        <span class="pill-dot"></span> PayPal Sandbox
+      </div>
+      <div class="pill pill-demo" id="demoBadge">
+        <span class="pill-dot"></span> Demo Mode Active (1m Overdue)
+      </div>
+    </div>
+  </header>
+
+  <!-- App Main Content Area -->
+  <div class="app-container">
+    
+    <!-- LEFT PANEL: Chat with Agent -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span>AI Invoicing Agent (Anthropic Tool-Calling)</span>
+        <button class="chip-btn" onclick="clearChat()">Clear Chat</button>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <!-- Initial Welcome Message -->
+        <div class="message-row agent">
+          <div class="avatar avatar-agent">AI</div>
+          <div class="bubble">
+            <strong>Hello! I am InvoicePilot, your autonomous PayPal invoicing copilot.</strong><br><br>
+            You can ask me in plain English to invoice clients, track payment statuses, or trigger reminders. For example:
+            <div style="margin-top: 8px; font-style: italic; color: #93c5fd;">
+              "Invoice sarah@example.com $400 for logo design, due in 15 days"
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Prompt Suggestions Chips -->
+      <div class="suggestions">
+        <button class="chip-btn" onclick="sendSuggestion('Invoice sarah@example.com $400 for logo design, due in 15 days')">
+          + Invoice Sarah $400 (Logo)
+        </button>
+        <button class="chip-btn" onclick="sendSuggestion('Invoice alex@techcorp.io $1200 for full-stack web app, due in 7 days')">
+          + Invoice Alex $1,200 (Requires confirmation)
+        </button>
+        <button class="chip-btn" onclick="sendSuggestion('List all my invoices and tell me which ones are unpaid')">
+          + List Unpaid Invoices
+        </button>
+      </div>
+
+      <!-- Input Bar -->
+      <div class="chat-input-area">
+        <form class="chat-form" id="chatForm" onsubmit="handleChatSubmit(event)">
+          <input 
+            type="text" 
+            id="chatInput" 
+            class="chat-input" 
+            placeholder="Type your invoice request..." 
+            autocomplete="off"
+            required
+          />
+          <button type="submit" class="btn-send" id="btnSend">
+            <span>Send</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Live Invoice Dashboard -->
+    <div class="dashboard-panel">
+      
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>PayPal Invoices & Auto-Chaser</h2>
+          <p>Real-time sync with PayPal Sandbox · Polling every 5s</p>
+        </div>
+        <div class="dashboard-controls">
+          <button class="btn-action" onclick="fetchInvoices()" title="Refresh Invoice List">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Refresh
+          </button>
+          <button class="btn-action btn-primary" onclick="triggerChaserNow()" title="Run overdue scan now">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            Run Chaser Now
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Total Invoiced</div>
+          <div class="metric-value" id="kpiTotal">$0.00</div>
+          <div class="metric-sub" id="kpiCount">0 invoices total</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Awaiting Payment</div>
+          <div class="metric-value" style="color: #38bdf8;" id="kpiPending">$0.00</div>
+          <div class="metric-sub" id="kpiPendingCount">0 pending sent</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Collected / Paid</div>
+          <div class="metric-value" style="color: #34d399;" id="kpiPaid">$0.00</div>
+          <div class="metric-sub" id="kpiPaidCount">0 paid invoices</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Reminders Dispatched</div>
+          <div class="metric-value" style="color: #fbbf24;" id="kpiReminders">0</div>
+          <div class="metric-sub">Autonomous chasing runs</div>
+        </div>
+      </div>
+
+      <!-- Live Invoices Table Card -->
+      <div class="table-card">
+        <div class="table-top">
+          <div class="filter-tabs">
+            <button class="tab-btn active" onclick="setFilter('ALL', this)">All</button>
+            <button class="tab-btn" onclick="setFilter('SENT', this)">Sent</button>
+            <button class="tab-btn" onclick="setFilter('PAID', this)">Paid</button>
+            <button class="tab-btn" onclick="setFilter('CANCELLED', this)">Cancelled</button>
+          </div>
+          <span style="font-size: 12px; color: var(--text-muted);" id="lastSyncTime">Syncing...</span>
+        </div>
+
+        <table class="invoice-table">
+          <thead>
+            <tr>
+              <th>Invoice ID</th>
+              <th>Client Email</th>
+              <th>Description</th>
+              <th>Amount (USD)</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th>Reminders</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceTableBody">
+            <tr>
+              <td colspan="8" class="empty-state">Loading invoices...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Reminder History Modal -->
+  <div class="modal-overlay" id="reminderModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalInvoiceId">Reminder History</h3>
+        <button class="modal-close" onclick="closeReminderModal()">&times;</button>
+      </div>
+      <div id="modalRemindersBody">
+        <!-- Rendered reminder log -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span id="toastMsg">Notification message</span>
+  </div>
+
+  <script>
+    const sessionId = "session_" + Math.random().toString(36).substring(2, 9);
+    let allInvoices = [];
+    let currentFilter = "ALL";
+
+    // Initialize
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchHealth();
+      fetchInvoices();
+      setInterval(fetchInvoices, 5000);
+    });
+
+    // Check health & demo mode
+    async function fetchHealth() {
+      try {
+        const res = await fetch("/health");
+        const data = await res.json();
+        const badge = document.getElementById("demoBadge");
+        if (data.demo_mode) {
+          badge.style.display = "inline-flex";
+        } else {
+          badge.style.display = "none";
+        }
+      } catch (err) {
+        console.error("Health check error:", err);
+      }
+    }
+
+    // Fetch and display invoices
+    async function fetchInvoices() {
+      try {
+        const res = await fetch("/invoices");
+        if (!res.ok) throw new Error("Failed to load invoices");
+        allInvoices = await res.json();
+        renderDashboard();
+        document.getElementById("lastSyncTime").textContent = "Updated " + new Date().toLocaleTimeString();
+      } catch (err) {
+        console.error("Error fetching invoices:", err);
+      }
+    }
+
+    function setFilter(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderTable();
+    }
+
+    function renderDashboard() {
+      // Calculate KPIs
+      let totalAmount = 0;
+      let pendingAmount = 0;
+      let paidAmount = 0;
+      let pendingCount = 0;
+      let paidCount = 0;
+      let totalReminders = 0;
+
+      allInvoices.forEach(inv => {
+        const amt = parseFloat(inv.amount || 0);
+        totalAmount += amt;
+        const status = (inv.status || "").toUpperCase();
+        if (status === "SENT" || status === "UNPAID") {
+          pendingAmount += amt;
+          pendingCount++;
+        } else if (status === "PAID") {
+          paidAmount += amt;
+          paidCount++;
+        }
+        totalReminders += (inv.reminder_count || 0);
+      });
+
+      document.getElementById("kpiTotal").textContent = "$" + totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      document.getElementById("kpiCount").textContent = `${allInvoices.length} invoices total`;
+      document.getElementById("kpiPending").textContent = "$" + pendingAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      document.getElementById("kpiPendingCount").textContent = `${pendingCount} awaiting payment`;
+      document.getElementById("kpiPaid").textContent = "$" + paidAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      document.getElementById("kpiPaidCount").textContent = `${paidCount} collected`;
+      document.getElementById("kpiReminders").textContent = totalReminders;
+
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById("invoiceTableBody");
+      let filtered = allInvoices;
+      if (currentFilter !== "ALL") {
+        filtered = allInvoices.filter(i => (i.status || "").toUpperCase() === currentFilter);
+      }
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No invoices matching current filter. Ask the agent on the left to create one!</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(inv => {
+        const status = (inv.status || "DRAFT").toUpperCase();
+        let badgeClass = "badge-sent";
+        if (status === "PAID") badgeClass = "badge-paid";
+        else if (status === "CANCELLED") badgeClass = "badge-cancelled";
+
+        const remCount = inv.reminder_count || 0;
+        const remBadge = remCount > 0 
+          ? `<span class="reminders-badge" style="cursor:pointer;" onclick="showReminderHistory('${inv.paypal_invoice_id}')">⚡ ${remCount} sent</span>`
+          : `<span style="color:var(--text-muted);font-size:12px;">0</span>`;
+
+        const canSimulate = (status === "SENT" || status === "UNPAID");
+
+        return `
+          <tr>
+            <td>
+              <span class="mono-id" onclick="copyText('${inv.paypal_invoice_id}')" title="Click to copy ID">
+                ${inv.paypal_invoice_id}
+              </span>
+            </td>
+            <td><strong>${escapeHtml(inv.client_email)}</strong></td>
+            <td>${escapeHtml(inv.description)}</td>
+            <td><strong>$${parseFloat(inv.amount).toFixed(2)}</strong></td>
+            <td>${inv.due_date || "N/A"}</td>
+            <td><span class="status-badge ${badgeClass}">${status}</span></td>
+            <td>${remBadge}</td>
+            <td>
+              <div style="display: flex; gap: 6px;">
+                ${canSimulate ? `
+                  <button class="chip-btn" style="border-color: #10b981; color: #34d399;" onclick="simulatePaid('${inv.paypal_invoice_id}')" title="Simulate client payment">
+                    Mark Paid
+                  </button>
+                ` : `<span style="font-size:11px; color:var(--text-muted);">${status === 'PAID' ? 'Settled' : 'Closed'}</span>`}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // Chat handling
+    async function handleChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById("chatInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = "";
+      appendMessage("user", text);
+
+      const btn = document.getElementById("btnSend");
+      btn.disabled = true;
+
+      // Show typing indicator
+      const typingId = appendTypingIndicator();
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message: text })
+        });
+        const data = await res.json();
+        removeTypingIndicator(typingId);
+
+        appendMessage("agent", data.reply, data.actions_taken);
+        // Refresh invoices in case an invoice or status change was performed
+        fetchInvoices();
+      } catch (err) {
+        removeTypingIndicator(typingId);
+        appendMessage("agent", "Sorry, an error occurred while processing your request: " + err.message);
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+
+    function sendSuggestion(text) {
+      document.getElementById("chatInput").value = text;
+      document.getElementById("chatForm").dispatchEvent(new Event("submit"));
+    }
+
+    function appendMessage(role, text, actions = []) {
+      const container = document.getElementById("chatMessages");
+      const row = document.createElement("div");
+      row.className = `message-row ${role}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = `avatar avatar-${role}`;
+      avatar.textContent = role === "agent" ? "AI" : "You";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.innerHTML = formatMarkdown(text);
+
+      if (actions && actions.length > 0) {
+        actions.forEach(action => {
+          const actDiv = document.createElement("div");
+          actDiv.className = "action-badge";
+          actDiv.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <strong>PayPal Tool Executed:</strong> ${action.tool}
+          `;
+          bubble.appendChild(actDiv);
+        });
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendTypingIndicator() {
+      const container = document.getElementById("chatMessages");
+      const id = "typing_" + Date.now();
+      const row = document.createElement("div");
+      row.className = "message-row agent";
+      row.id = id;
+      row.innerHTML = `
+        <div class="avatar avatar-agent">AI</div>
+        <div class="bubble" style="color: var(--text-muted); font-style: italic;">
+          Working on your request...
+        </div>
+      `;
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+      return id;
+    }
+
+    function removeTypingIndicator(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    function clearChat() {
+      const container = document.getElementById("chatMessages");
+      container.innerHTML = `
+        <div class="message-row agent">
+          <div class="avatar avatar-agent">AI</div>
+          <div class="bubble">Chat cleared. Ready for your next invoicing command!</div>
+        </div>
+      `;
+    }
+
+    // Dev simulate paid
+    async function simulatePaid(invoiceId) {
+      try {
+        const res = await fetch(`/dev/simulate-paid/${invoiceId}`, { method: "POST" });
+        if (!res.ok) throw new Error("Simulation failed");
+        showToast(`Invoice ${invoiceId} marked as PAID!`);
+        fetchInvoices();
+      } catch (err) {
+        showToast("Error: " + err.message);
+      }
+    }
+
+    // Trigger chaser manually
+    async function triggerChaserNow() {
+      try {
+        const res = await fetch("/dev/trigger-chaser", { method: "POST" });
+        const data = await res.json();
+        const count = (data.actions_taken || []).length;
+        if (count > 0) {
+          showToast(`Chaser sent ${count} reminder(s)!`);
+        } else {
+          showToast("Chaser ran: No overdue invoices requiring reminders.");
+        }
+        fetchInvoices();
+      } catch (err) {
+        showToast("Error triggering chaser: " + err.message);
+      }
+    }
+
+    // Reminder history modal
+    async function showReminderHistory(invoiceId) {
+      document.getElementById("modalInvoiceId").textContent = `Reminders for ${invoiceId}`;
+      const body = document.getElementById("modalRemindersBody");
+      body.innerHTML = "Loading history...";
+      document.getElementById("reminderModal").classList.add("active");
+
+      try {
+        const res = await fetch(`/invoices/${invoiceId}`);
+        const data = await res.json();
+        const reminders = data.reminders || [];
+        if (reminders.length === 0) {
+          body.innerHTML = "<p style='color:var(--text-muted);'>No reminders recorded for this invoice yet.</p>";
+          return;
+        }
+        body.innerHTML = reminders.map((r, i) => `
+          <div class="timeline-item">
+            <div class="timeline-time">#${i + 1} · Sent at: ${new Date(r.sent_at).toLocaleString()}</div>
+            <div>${escapeHtml(r.message)}</div>
+          </div>
+        `).join("");
+      } catch (err) {
+        body.innerHTML = "<p style='color:var(--danger);'>Failed to load reminders.</p>";
+      }
+    }
+
+    function closeReminderModal() {
+      document.getElementById("reminderModal").classList.remove("active");
+    }
+
+    // Helpers
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      document.getElementById("toastMsg").textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3500);
+    }
+
+    function copyText(txt) {
+      navigator.clipboard.writeText(txt);
+      showToast("Copied to clipboard: " + txt);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function formatMarkdown(text) {
+      if (!text) return "";
+      let html = escapeHtml(text);
+      // bold
+      html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      // inline code
+      html = html.replace(/`([^`]+)`/g, "<code style='background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;font-family:var(--font-mono);font-size:12px;'>$1</code>");
+      // line breaks
+      html = html.replace(/\n/g, "<br>");
+      return html;
+    }
+  </script>
+</body>
+</html>

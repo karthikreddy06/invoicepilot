@@ -19,6 +19,13 @@ def client_with_db(monkeypatch):
         os.remove(path)
 
 
+def test_serve_index_html(client_with_db):
+    response = client_with_db.get("/")
+    assert response.status_code == 200
+    assert "InvoicePilot" in response.text
+    assert "PayPal Sandbox" in response.text
+
+
 def test_health_endpoint(client_with_db):
     response = client_with_db.get("/health")
     assert response.status_code == 200

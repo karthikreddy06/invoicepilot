@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from openai import AsyncOpenAI, RateLimitError, OpenAIError
 
@@ -37,20 +38,48 @@ def get_llm_client() -> Optional[AsyncOpenAI]:
     )
 
 
+def format_invoice_created_reply(inv_data: Dict[str, Any]) -> str:
+    """Deterministic safety-net template for successful invoice creation."""
+    invoice_id = inv_data.get("invoice_id", "")
+    email = inv_data.get("client_email", "")
+    amount = float(inv_data.get("amount", 0.0))
+    desc = inv_data.get("description", "")
+    due_date = inv_data.get("due_date", "N/A")
+    return (
+        f"Your PayPal invoice has been created and sent successfully:\n\n"
+        f"- **Invoice ID:** {invoice_id}\n"
+        f"- **Recipient:** {email}\n"
+        f"- **Amount:** ${amount:.2f} USD\n"
+        f"- **Description:** {desc}\n"
+        f"- **Due Date:** {due_date}\n\n"
+        f"You can track this invoice and its payment status on your live dashboard."
+    )
+
+
 async def _call_chat_completion(
     client: Any,
     messages: List[Dict[str, Any]],
     max_retries: int = 2,
 ) -> Any:
-    """Call chat.completions.create with short retry backoff for rate-limit errors (429)."""
+    """Call chat.completions.create with short retry backoff for rate-limit errors (429) and reasoning config."""
     attempt = 0
+    extra_body: Dict[str, Any] = {}
+    if settings.LLM_INCLUDE_REASONING is not None:
+        extra_body["include_reasoning"] = settings.LLM_INCLUDE_REASONING
+    if settings.LLM_REASONING_EFFORT:
+        extra_body["reasoning_effort"] = settings.LLM_REASONING_EFFORT
+
     while True:
         try:
-            res = client.chat.completions.create(
-                model=settings.LLM_MODEL,
-                messages=messages,
-                tools=TOOLS_SCHEMA,
-            )
+            kwargs: Dict[str, Any] = {
+                "model": settings.LLM_MODEL,
+                "messages": messages,
+                "tools": TOOLS_SCHEMA,
+            }
+            if extra_body:
+                kwargs["extra_body"] = extra_body
+
+            res = client.chat.completions.create(**kwargs)
             if inspect.isawaitable(res):
                 return await res
             return res
@@ -128,10 +157,20 @@ async def run_agent(
         tool_calls = getattr(message, "tool_calls", None)
 
         if not tool_calls:
-            # Model responded with plain text
-            reply_text = message.content or ""
-            history.append({"role": "assistant", "content": reply_text})
-            return reply_text, actions_taken
+            # Check safety net: if an invoice was successfully created, use the template reply
+            for act in actions_taken:
+                if act.get("tool") == "create_and_send_invoice" and act.get("output", {}).get("success"):
+                    invoice_reply = format_invoice_created_reply(act["output"])
+                    history.append({"role": "assistant", "content": invoice_reply})
+                    return invoice_reply, actions_taken
+
+            # Only read message.content, ignoring any reasoning/reasoning_content attribute
+            raw_content = message.content or ""
+            # Strip any inline <think>...</think> blocks
+            clean_reply = re.sub(r"<think>[\s\S]*?</think>", "", raw_content).strip()
+
+            history.append({"role": "assistant", "content": clean_reply})
+            return clean_reply, actions_taken
 
         # Build assistant turn message including tool calls for history
         serializable_tool_calls = []
@@ -202,6 +241,13 @@ async def run_agent(
                     "name": fn_name,
                     "content": error_msg,
                 })
+
+    # If loop ended and an invoice was successfully created, use template reply
+    for act in actions_taken:
+        if act.get("tool") == "create_and_send_invoice" and act.get("output", {}).get("success"):
+            invoice_reply = format_invoice_created_reply(act["output"])
+            history.append({"role": "assistant", "content": invoice_reply})
+            return invoice_reply, actions_taken
 
     fallback_reply = "I completed the available actions."
     history.append({"role": "assistant", "content": fallback_reply})

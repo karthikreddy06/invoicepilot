@@ -144,3 +144,92 @@ async def test_agent_rate_limit_handling(temp_db):
     reply, actions = await run_agent("test_rate_limit", "Invoice test", client=mock_client)
     assert "rate limit reached" in reply.lower()
     assert actions == []
+
+
+@pytest.mark.asyncio
+async def test_agent_safety_net_masks_leaked_reasoning_for_invoice_create(temp_db):
+    clear_session_history("test_safety_net")
+
+    # Step 1: Tool call create_and_send_invoice
+    tc = MagicMock()
+    tc.id = "call_leak_1"
+    tc.function.name = "create_and_send_invoice"
+    tc.function.arguments = json.dumps({
+        "client_email": "sarah@example.com",
+        "description": "Logo design",
+        "amount": 400.0,
+        "due_date": "2026-11-20",
+    })
+
+    msg1 = MagicMock()
+    msg1.content = None
+    msg1.tool_calls = [tc]
+    resp1 = MagicMock()
+    choice1 = MagicMock()
+    choice1.message = msg1
+    resp1.choices = [choice1]
+
+    # Step 2: Model returns leaked reasoning in content and reasoning fields
+    msg2 = MagicMock()
+    msg2.content = "We need to provide concise professional reply to the user... Here is the invoice."
+    msg2.reasoning = "Internal thought tokens: user asked for an invoice."
+    msg2.reasoning_content = "Leaked reasoning_content: formulating final response."
+    msg2.tool_calls = None
+    resp2 = MagicMock()
+    choice2 = MagicMock()
+    choice2.message = msg2
+    resp2.choices = [choice2]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=[resp1, resp2])
+
+    with patch("app.agent.tools.create_draft_invoice", new_callable=AsyncMock) as mock_draft, \
+         patch("app.agent.tools.send_invoice", new_callable=AsyncMock) as mock_send:
+        mock_draft.return_value = {"id": "INV2-TEST-LEAK", "status": "DRAFT"}
+        mock_send.return_value = {"status": "SENT", "id": "INV2-TEST-LEAK"}
+
+        reply, actions = await run_agent(
+            "test_safety_net",
+            "Invoice sarah@example.com $400 for logo design, due in 15 days",
+            client=mock_client,
+        )
+
+        # Confirm leaked reasoning is NEVER present in the user-facing reply
+        assert "We need to provide concise professional reply" not in reply
+        assert "Internal thought tokens" not in reply
+        assert "Leaked reasoning_content" not in reply
+
+        # Confirm safety net template rendered real tool values
+        assert "INV2-TEST-LEAK" in reply
+        assert "sarah@example.com" in reply
+        assert "$400.00 USD" in reply
+        assert "2026-11-20" in reply
+
+
+@pytest.mark.asyncio
+async def test_agent_strips_think_tags_and_ignores_reasoning_fields(temp_db):
+    clear_session_history("test_strip_think")
+
+    msg = MagicMock()
+    msg.content = "<think>The user wants to know my capabilities. Be helpful.</think>I can help you create and track PayPal invoices."
+    msg.reasoning = "Thinking process..."
+    msg.reasoning_content = "Reasoning content..."
+    msg.tool_calls = None
+
+    resp = MagicMock()
+    choice = MagicMock()
+    choice.message = msg
+    resp.choices = [choice]
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=resp)
+
+    reply, actions = await run_agent("test_strip_think", "What can you do?", client=mock_client)
+
+    # Confirm think tags and reasoning are completely hidden
+    assert "<think>" not in reply
+    assert "</think>" not in reply
+    assert "The user wants to know my capabilities" not in reply
+    assert "Thinking process" not in reply
+    assert "Reasoning content" not in reply
+    assert reply == "I can help you create and track PayPal invoices."

@@ -17,6 +17,8 @@ class Settings:
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
     LLM_BASE_URL: Optional[str] = os.getenv("LLM_BASE_URL") or None
+    LLM_INCLUDE_REASONING: bool = os.getenv("LLM_INCLUDE_REASONING", "false").lower() in ("true", "1", "yes")
+    LLM_REASONING_EFFORT: Optional[str] = os.getenv("LLM_REASONING_EFFORT", "low")
 
     DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "paychase.db"))
     DEMO_MODE: bool = os.getenv("DEMO_MODE", "true").lower() in ("true", "1", "yes")

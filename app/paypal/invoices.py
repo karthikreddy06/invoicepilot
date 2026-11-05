@@ -1,7 +1,10 @@
-from datetime import datetime, date, timedelta
+import logging
+from datetime import datetime, timezone, date, timedelta
 from typing import Any, Dict, List, Optional
 import httpx
 from app.paypal.client import PayPalAPIError, paypal_client
+
+logger = logging.getLogger(__name__)
 
 
 async def _handle_response(response: httpx.Response, action_name: str) -> Any:
@@ -194,4 +197,54 @@ async def cancel_invoice(
         resp = await http.post(url, json=payload, headers=headers)
         result = await _handle_response(resp, f"cancel_invoice({invoice_id})")
         return result or {"success": True, "invoice_id": invoice_id, "message": "Invoice cancelled successfully"}
+
+
+async def reconcile_invoices_with_paypal(
+    client: Optional[Any] = None,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Reconciles all non-final local invoices with live PayPal Sandbox status.
+    Calls GET /v2/invoicing/invoices/{id} for each invoice and syncs any status changes into SQLite.
+    """
+    from app.db import get_non_final_invoices, update_invoice_status
+
+    non_final = get_non_final_invoices(db_path=db_path)
+    updated_records = []
+
+    for inv in non_final:
+        inv_id = inv["paypal_invoice_id"]
+        try:
+            remote_data = await get_invoice(inv_id, client=client)
+            remote_status = remote_data.get("status")
+
+            if not remote_status:
+                continue
+
+            mapped_status = "PAID" if remote_status in ("PAID", "MARKED_AS_PAID") else remote_status
+
+            if mapped_status != inv.get("status"):
+                paid_at = None
+                if mapped_status == "PAID":
+                    payments = remote_data.get("payments", {})
+                    transactions = payments.get("transactions", [])
+                    if transactions and "payment_date" in transactions[0]:
+                        paid_at = transactions[0]["payment_date"]
+                    else:
+                        paid_at = datetime.now(timezone.utc).isoformat()
+
+                updated = update_invoice_status(
+                    paypal_invoice_id=inv_id,
+                    status=mapped_status,
+                    paid_at=paid_at,
+                    is_simulated=0,
+                    db_path=db_path,
+                )
+                if updated:
+                    logger.info(f"Reconciled invoice {inv_id}: {inv.get('status')} -> {mapped_status}")
+                    updated_records.append(updated)
+        except Exception as exc:
+            logger.warning(f"Could not reconcile invoice {inv_id} with PayPal: {exc}")
+
+    return updated_records
 

@@ -396,6 +396,57 @@
       background: #005ea6;
     }
 
+    .btn-danger-outline {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    .btn-danger-outline:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+
+    .badge-simulated {
+      display: inline-flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      margin-left: 4px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    .badge-real-settled {
+      display: inline-flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      margin-left: 4px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    .btn-sim-paid {
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fbbf24;
+    }
+
+    .btn-sim-paid:hover {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+    }
+
     /* KPI Cards */
     .metrics-grid {
       display: grid;
@@ -749,11 +800,24 @@
             </svg>
             Refresh
           </button>
+          <button class="btn-action" onclick="syncWithPayPal()" title="Reconcile live statuses with PayPal Sandbox">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Sync with PayPal
+          </button>
           <button class="btn-action btn-primary" onclick="triggerChaserNow()" title="Run overdue scan now">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
             </svg>
             Run Chaser Now
+          </button>
+          <button class="btn-action btn-danger-outline" onclick="resetDatabase()" title="Clear all invoices and reminders for a clean demo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Reset DB
           </button>
         </div>
       </div>
@@ -937,6 +1001,14 @@
         if (status === "PAID") badgeClass = "badge-paid";
         else if (status === "CANCELLED") badgeClass = "badge-cancelled";
 
+        const isSimulated = (inv.is_simulated === 1 || inv.is_simulated === true);
+        let statusDisplay = `<span class="status-badge ${badgeClass}">${status}</span>`;
+        if (status === "PAID") {
+          statusDisplay += isSimulated
+            ? `<span class="badge-simulated" title="Local demo payment simulation only - not settled in PayPal">Simulated (demo)</span>`
+            : `<span class="badge-real-settled" title="Confirmed settled in PayPal Sandbox">PayPal Settled</span>`;
+        }
+
         const remCount = inv.reminder_count || 0;
         const remBadge = remCount > 0 
           ? `<span class="reminders-badge" style="cursor:pointer;" onclick="showReminderHistory('${inv.paypal_invoice_id}')">⚡ ${remCount} sent</span>`
@@ -955,15 +1027,15 @@
             <td>${escapeHtml(inv.description)}</td>
             <td><strong>$${parseFloat(inv.amount).toFixed(2)}</strong></td>
             <td>${inv.due_date || "N/A"}</td>
-            <td><span class="status-badge ${badgeClass}">${status}</span></td>
+            <td>${statusDisplay}</td>
             <td>${remBadge}</td>
             <td>
               <div style="display: flex; gap: 6px;">
                 ${canSimulate ? `
-                  <button class="chip-btn" style="border-color: #10b981; color: #34d399;" onclick="simulatePaid('${inv.paypal_invoice_id}')" title="Simulate client payment">
-                    Mark Paid
+                  <button class="chip-btn btn-sim-paid" onclick="simulatePaid('${inv.paypal_invoice_id}')" title="Simulate client payment locally for demo">
+                    Simulate paid (demo)
                   </button>
-                ` : `<span style="font-size:11px; color:var(--text-muted);">${status === 'PAID' ? 'Settled' : 'Closed'}</span>`}
+                ` : `<span style="font-size:11px; color:var(--text-muted);">${status === 'PAID' ? (isSimulated ? 'Local Demo Paid' : 'PayPal Settled') : 'Closed'}</span>`}
               </div>
             </td>
           </tr>
@@ -1083,10 +1155,39 @@
       try {
         const res = await fetch(`/dev/simulate-paid/${invoiceId}`, { method: "POST" });
         if (!res.ok) throw new Error("Simulation failed");
-        showToast(`Invoice ${invoiceId} marked as PAID!`);
+        showToast(`Invoice ${invoiceId} marked as local demo PAID!`);
         fetchInvoices();
       } catch (err) {
         showToast("Error: " + err.message);
+      }
+    }
+
+    // Sync with PayPal
+    async function syncWithPayPal() {
+      try {
+        showToast("Reconciling with PayPal Sandbox...");
+        const res = await fetch("/invoices/sync", { method: "POST" });
+        if (!res.ok) throw new Error("Sync failed");
+        const data = await res.json();
+        showToast(`PayPal Sync complete: ${data.reconciled_count} invoice(s) updated.`);
+        fetchInvoices();
+      } catch (err) {
+        showToast("Error syncing with PayPal: " + err.message);
+      }
+    }
+
+    // Reset database
+    async function resetDatabase() {
+      if (!confirm("Are you sure you want to clear all invoices and reminders? This cannot be undone.")) {
+        return;
+      }
+      try {
+        const res = await fetch("/dev/reset", { method: "POST" });
+        if (!res.ok) throw new Error("Failed to reset database");
+        showToast("Database reset: All invoices and reminders cleared.");
+        fetchInvoices();
+      } catch (err) {
+        showToast("Error resetting database: " + err.message);
       }
     }
 

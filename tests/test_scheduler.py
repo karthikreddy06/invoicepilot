@@ -69,8 +69,10 @@ async def test_run_chaser_job_workflow(temp_db):
         db_path=temp_db,
     )
 
-    with patch("app.scheduler.send_reminder", new_callable=AsyncMock) as mock_send:
+    with patch("app.scheduler.send_reminder", new_callable=AsyncMock) as mock_send, \
+         patch("app.paypal.invoices.get_invoice", new_callable=AsyncMock) as mock_get_inv:
         mock_send.return_value = {"success": True}
+        mock_get_inv.return_value = {"id": "INV-CHASE-1", "status": "SENT"}
 
         # 1st run: sends reminder #1
         actions1 = await run_chaser_job(demo_mode=True)
@@ -118,4 +120,39 @@ async def test_run_chaser_job_workflow(temp_db):
         # 4th run: reached max 3 reminders, no more should be sent
         actions5 = await run_chaser_job(demo_mode=True)
         assert len(actions5) == 0
+
+
+@pytest.mark.asyncio
+async def test_chaser_reconciles_and_skips_paid_invoice(temp_db):
+    old_created = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    upsert_invoice(
+        paypal_invoice_id="INV-ALREADY-PAID",
+        client_email="payer@test.com",
+        description="SEO Work",
+        amount=300.0,
+        status="SENT",
+        created_at=old_created,
+        db_path=temp_db,
+    )
+
+    with patch("app.paypal.invoices.get_invoice", new_callable=AsyncMock) as mock_get_inv, \
+         patch("app.scheduler.send_reminder", new_callable=AsyncMock) as mock_send:
+        # PayPal says this invoice is actually PAID
+        mock_get_inv.return_value = {
+            "id": "INV-ALREADY-PAID",
+            "status": "PAID",
+            "payments": {"transactions": [{"payment_date": "2026-11-05T17:00:00Z"}]}
+        }
+
+        # Run chaser
+        actions = await run_chaser_job(demo_mode=True, db_path=temp_db)
+
+        # Confirm NO reminder was sent
+        assert len(actions) == 0
+        mock_send.assert_not_called()
+
+        # Confirm DB status was reconciled to PAID
+        inv = get_invoice_by_paypal_id("INV-ALREADY-PAID", db_path=temp_db)
+        assert inv["status"] == "PAID"
+        assert inv["paid_at"] == "2026-11-05T17:00:00Z"
 

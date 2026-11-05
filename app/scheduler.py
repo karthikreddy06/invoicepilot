@@ -10,7 +10,7 @@ from app.db import (
     record_reminder,
     update_invoice_status,
 )
-from app.paypal.invoices import send_reminder, get_invoice
+from app.paypal.invoices import send_reminder, get_invoice, reconcile_invoices_with_paypal
 from app.paypal.client import PayPalAPIError
 
 logger = logging.getLogger(__name__)
@@ -89,12 +89,23 @@ def is_invoice_overdue(inv: Dict[str, Any], demo_mode: bool = False) -> bool:
         return False
 
 
-async def run_chaser_job(demo_mode: Optional[bool] = None) -> List[Dict[str, Any]]:
+async def run_chaser_job(
+    demo_mode: Optional[bool] = None,
+    client: Optional[Any] = None,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Scan for unpaid overdue invoices and send escalating reminders (up to 3 max).
+    Reconciles with PayPal live statuses first so no paid invoices are chased.
     """
+    # Reconcile with PayPal FIRST so we never chase an invoice that PayPal reports as paid
+    try:
+        await reconcile_invoices_with_paypal(client=client, db_path=db_path)
+    except Exception as exc:
+        logger.warning(f"Reconciliation during chaser cycle failed: {exc}")
+
     is_demo = settings.DEMO_MODE if demo_mode is None else demo_mode
-    unpaid_invoices = get_unpaid_invoices()
+    unpaid_invoices = get_unpaid_invoices(db_path=db_path)
     actions_taken: List[Dict[str, Any]] = []
 
     for inv in unpaid_invoices:
@@ -109,13 +120,13 @@ async def run_chaser_job(demo_mode: Optional[bool] = None) -> List[Dict[str, Any
             continue
 
         # Check how many reminders have already been sent
-        rem_count = get_reminder_count(invoice_id)
+        rem_count = get_reminder_count(invoice_id, db_path=db_path)
         if rem_count >= 3:
             logger.info(f"Invoice {invoice_id} has reached maximum 3 reminders. Skipping.")
             continue
 
         # Check throttle: in demo mode require at least 30s since last reminder; in prod 24h
-        prior_reminders = get_reminders_for_invoice(invoice_id)
+        prior_reminders = get_reminders_for_invoice(invoice_id, db_path=db_path)
         if prior_reminders:
             last_rem = prior_reminders[-1]
             try:
@@ -142,11 +153,12 @@ async def run_chaser_job(demo_mode: Optional[bool] = None) -> List[Dict[str, Any
                 invoice_id=invoice_id,
                 subject=reminder_content["subject"],
                 note=reminder_content["note"],
+                client=client,
             )
 
             # Record in DB
             full_msg = f"[{reminder_content['subject']}] {reminder_content['note']}"
-            db_record = record_reminder(invoice_id, message=full_msg)
+            db_record = record_reminder(invoice_id, message=full_msg, db_path=db_path)
 
             actions_taken.append({
                 "invoice_id": invoice_id,

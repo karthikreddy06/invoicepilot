@@ -21,6 +21,7 @@ class InvoiceDB(InvoiceBase):
     created_at: str
     paid_at: Optional[str] = None
     reminder_count: int = 0
+    is_simulated: int = 0
 
 
 class ReminderDB(BaseModel):

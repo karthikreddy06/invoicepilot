@@ -59,10 +59,12 @@ async def test_end_to_end_flow(test_env):
     with patch("app.agent.agent.get_llm_client", return_value=mock_llm), \
          patch("app.agent.tools.create_draft_invoice", new_callable=AsyncMock) as mock_draft, \
          patch("app.agent.tools.send_invoice", new_callable=AsyncMock) as mock_send, \
+         patch("app.paypal.invoices.get_invoice", new_callable=AsyncMock) as mock_get_inv, \
          patch("app.scheduler.send_reminder", new_callable=AsyncMock) as mock_chase_send:
 
         mock_draft.return_value = {"id": "INV2-DEMO-999", "status": "DRAFT"}
         mock_send.return_value = {"status": "SENT", "id": "INV2-DEMO-999"}
+        mock_get_inv.return_value = {"id": "INV2-DEMO-999", "status": "SENT"}
         mock_chase_send.return_value = {"success": True}
 
         # 1. Chat request

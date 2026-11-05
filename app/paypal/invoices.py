@@ -1,10 +1,17 @@
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone, date, timedelta
 from typing import Any, Dict, List, Optional
 import httpx
 from app.paypal.client import PayPalAPIError, paypal_client
 
 logger = logging.getLogger(__name__)
+
+# Shared lock and cooldown state for PayPal reconciliation to avoid API hammering
+_reconciliation_lock = asyncio.Lock()
+_last_reconciliation_time: float = 0.0
+RECONCILIATION_MIN_INTERVAL: float = 15.0
 
 
 async def _handle_response(response: httpx.Response, action_name: str) -> Any:
@@ -200,51 +207,94 @@ async def cancel_invoice(
 
 
 async def reconcile_invoices_with_paypal(
+    force: bool = False,
     client: Optional[Any] = None,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Reconciles all non-final local invoices with live PayPal Sandbox status.
-    Calls GET /v2/invoicing/invoices/{id} for each invoice and syncs any status changes into SQLite.
+    - Uses one shared async lock across the scheduler, GET /invoices, and the Sync button.
+    - Enforces a minimum interval of 15 seconds (can be bypassed with force=True via Sync button).
+    - Fetches invoices concurrently with asyncio.gather (max 5 at once).
+    - Skips invoices that are already final (PAID, CANCELLED, REFUNDED).
+    - Retains 503 Service Unavailable warning behavior.
     """
-    from app.db import get_non_final_invoices, update_invoice_status
+    global _last_reconciliation_time
 
-    non_final = get_non_final_invoices(db_path=db_path)
-    updated_records = []
+    now = time.time()
+    if not force and (now - _last_reconciliation_time < RECONCILIATION_MIN_INTERVAL):
+        logger.debug(
+            f"Skipping reconciliation: {now - _last_reconciliation_time:.1f}s since last run "
+            f"(< {RECONCILIATION_MIN_INTERVAL}s minimum interval)."
+        )
+        return []
 
-    for inv in non_final:
-        inv_id = inv["paypal_invoice_id"]
-        try:
-            remote_data = await get_invoice(inv_id, client=client)
-            remote_status = remote_data.get("status")
+    async with _reconciliation_lock:
+        now = time.time()
+        if not force and (now - _last_reconciliation_time < RECONCILIATION_MIN_INTERVAL):
+            return []
 
-            if not remote_status:
-                continue
+        _last_reconciliation_time = now
 
-            mapped_status = "PAID" if remote_status in ("PAID", "MARKED_AS_PAID") else remote_status
+        from app.db import get_non_final_invoices, update_invoice_status
 
-            if mapped_status != inv.get("status"):
-                paid_at = None
-                if mapped_status == "PAID":
-                    payments = remote_data.get("payments", {})
-                    transactions = payments.get("transactions", [])
-                    if transactions and "payment_date" in transactions[0]:
-                        paid_at = transactions[0]["payment_date"]
+        non_final = get_non_final_invoices(db_path=db_path)
+        if not non_final:
+            return []
+
+        # Semaphore to limit concurrency to at most 5 calls at once
+        sem = asyncio.Semaphore(5)
+
+        async def reconcile_single_invoice(inv: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            inv_id = inv["paypal_invoice_id"]
+            current_status = (inv.get("status") or "").upper()
+
+            # Skip invoices that are already final
+            if current_status in ("PAID", "CANCELLED", "REFUNDED"):
+                return None
+
+            async with sem:
+                try:
+                    remote_data = await get_invoice(inv_id, client=client)
+                    remote_status = remote_data.get("status")
+
+                    if not remote_status:
+                        return None
+
+                    # PayPal statuses: DRAFT, SENT, SCHEDULED, PAID, MARKED_AS_PAID, CANCELLED, REFUNDED, PARTIALLY_PAID
+                    mapped_status = "PAID" if remote_status in ("PAID", "MARKED_AS_PAID") else remote_status
+
+                    if mapped_status != current_status:
+                        paid_at = None
+                        if mapped_status == "PAID":
+                            payments = remote_data.get("payments", {})
+                            transactions = payments.get("transactions", [])
+                            if transactions and "payment_date" in transactions[0]:
+                                paid_at = transactions[0]["payment_date"]
+                            else:
+                                paid_at = datetime.now(timezone.utc).isoformat()
+
+                        updated = update_invoice_status(
+                            paypal_invoice_id=inv_id,
+                            status=mapped_status,
+                            paid_at=paid_at,
+                            is_simulated=0,
+                            db_path=db_path,
+                        )
+                        if updated:
+                            logger.info(f"Reconciled invoice {inv_id}: {current_status} -> {mapped_status}")
+                            return updated
+                    return None
+                except PayPalAPIError as exc:
+                    if exc.status_code == 503:
+                        logger.warning(f"PayPal 503 Service Unavailable during reconciliation of invoice {inv_id}. Retrying on next cycle.")
                     else:
-                        paid_at = datetime.now(timezone.utc).isoformat()
+                        logger.warning(f"PayPal error reconciling invoice {inv_id} ({exc.status_code}): {exc}")
+                    return None
+                except Exception as exc:
+                    logger.warning(f"Could not reconcile invoice {inv_id} with PayPal: {exc}")
+                    return None
 
-                updated = update_invoice_status(
-                    paypal_invoice_id=inv_id,
-                    status=mapped_status,
-                    paid_at=paid_at,
-                    is_simulated=0,
-                    db_path=db_path,
-                )
-                if updated:
-                    logger.info(f"Reconciled invoice {inv_id}: {inv.get('status')} -> {mapped_status}")
-                    updated_records.append(updated)
-        except Exception as exc:
-            logger.warning(f"Could not reconcile invoice {inv_id} with PayPal: {exc}")
-
-    return updated_records
+        results = await asyncio.gather(*(reconcile_single_invoice(inv) for inv in non_final))
+        return [r for r in results if r is not None]
 

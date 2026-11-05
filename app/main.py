@@ -31,10 +31,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# State for rate-limiting automatic reconciliation on GET /invoices
-_last_reconciliation_time: float = 0.0
-
-
+# FastAPI Application setup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: initialize database and start background reminder chaser
@@ -105,16 +102,12 @@ async def chat_endpoint(payload: ChatRequest):
 async def list_invoices_endpoint(status: Optional[str] = None):
     """
     Retrieve all tracked invoices from SQLite, optionally filtered by status.
-    Automatically reconciles active invoices with PayPal live status at most once every 10 seconds.
+    Automatically reconciles active invoices with PayPal live status (shared lock, 15s interval).
     """
-    global _last_reconciliation_time
-    now = time.time()
-    if now - _last_reconciliation_time >= 10.0:
-        _last_reconciliation_time = now
-        try:
-            await reconcile_invoices_with_paypal()
-        except Exception as exc:
-            logger.warning(f"Automatic reconciliation on GET /invoices failed: {exc}")
+    try:
+        await reconcile_invoices_with_paypal(force=False)
+    except Exception as exc:
+        logger.warning(f"Automatic reconciliation on GET /invoices failed: {exc}")
 
     invoices = get_all_invoices(status=status)
     return invoices
@@ -123,11 +116,9 @@ async def list_invoices_endpoint(status: Optional[str] = None):
 @app.post("/invoices/sync")
 async def sync_invoices_endpoint():
     """
-    Force immediate reconciliation of all active invoices with PayPal Sandbox status.
+    Force immediate reconciliation of all active invoices with PayPal Sandbox status (bypasses 15s interval).
     """
-    global _last_reconciliation_time
-    _last_reconciliation_time = time.time()
-    updated = await reconcile_invoices_with_paypal()
+    updated = await reconcile_invoices_with_paypal(force=True)
     return {
         "success": True,
         "reconciled_count": len(updated),

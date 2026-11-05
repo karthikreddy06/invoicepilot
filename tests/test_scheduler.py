@@ -13,6 +13,8 @@ from app.scheduler import (
 
 @pytest.fixture
 def temp_db(monkeypatch):
+    import app.paypal.invoices as inv_mod
+    inv_mod._last_reconciliation_time = 0.0
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     init_db(path)

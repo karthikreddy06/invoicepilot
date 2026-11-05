@@ -100,7 +100,7 @@ async def run_chaser_job(
     """
     # Reconcile with PayPal FIRST so we never chase an invoice that PayPal reports as paid
     try:
-        await reconcile_invoices_with_paypal(client=client, db_path=db_path)
+        await reconcile_invoices_with_paypal(force=False, client=client, db_path=db_path)
     except Exception as exc:
         logger.warning(f"Reconciliation during chaser cycle failed: {exc}")
 

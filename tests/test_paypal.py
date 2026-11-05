@@ -172,3 +172,99 @@ async def test_paypal_error_handling(mock_client):
         assert exc_info.value.status_code == 404
         assert "RESOURCE_NOT_FOUND" in str(exc_info.value.response_body)
 
+
+@pytest.mark.asyncio
+async def test_reconciliation_minimum_interval_and_force(mock_client, tmp_path):
+    import time
+    from app.db import init_db, upsert_invoice
+    from app.paypal.invoices import reconcile_invoices_with_paypal, _last_reconciliation_time
+    import app.paypal.invoices as inv_mod
+
+    db_path = str(tmp_path / "test_reconcile.db")
+    init_db(db_path)
+    upsert_invoice("INV2-REC-1", "user@test.com", "Dev", 100.0, "SENT", db_path=db_path)
+
+    # Reset last reconciliation time to 0
+    inv_mod._last_reconciliation_time = 0.0
+
+    mock_resp = MagicMock()
+    mock_resp.is_error = False
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"id": "INV2-REC-1", "status": "PAID", "payments": {}}
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_resp
+
+        # 1st call: should run and update
+        res1 = await reconcile_invoices_with_paypal(force=False, client=mock_client, db_path=db_path)
+        assert len(res1) == 1
+
+        # 2nd call immediately: throttled by 15-second interval
+        res2 = await reconcile_invoices_with_paypal(force=False, client=mock_client, db_path=db_path)
+        assert len(res2) == 0
+
+        # 3rd call with force=True (Sync button): bypasses interval
+        upsert_invoice("INV2-REC-2", "user2@test.com", "Dev2", 200.0, "SENT", db_path=db_path)
+        mock_resp.json.return_value = {"id": "INV2-REC-2", "status": "PAID", "payments": {}}
+        res3 = await reconcile_invoices_with_paypal(force=True, client=mock_client, db_path=db_path)
+        assert len(res3) == 1
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_concurrency_and_skips_final(mock_client, tmp_path):
+    from app.db import init_db, upsert_invoice, get_invoice_by_paypal_id
+    from app.paypal.invoices import reconcile_invoices_with_paypal
+    import app.paypal.invoices as inv_mod
+
+    db_path = str(tmp_path / "test_concurrency.db")
+    init_db(db_path)
+    inv_mod._last_reconciliation_time = 0.0
+
+    # Seed 6 invoices (SENT) + 1 already PAID + 1 CANCELLED
+    for i in range(1, 7):
+        upsert_invoice(f"INV-CONC-{i}", f"u{i}@test.com", f"Task {i}", 100.0 * i, "SENT", db_path=db_path)
+    upsert_invoice("INV-FINAL-PAID", "paid@test.com", "Done", 50.0, "PAID", db_path=db_path)
+    upsert_invoice("INV-FINAL-CANCELLED", "cancel@test.com", "Cancel", 50.0, "CANCELLED", db_path=db_path)
+
+    async def mock_get_inv(url, headers):
+        inv_id = url.split("/")[-1]
+        resp = MagicMock()
+        resp.is_error = False
+        resp.status_code = 200
+        resp.json.return_value = {"id": inv_id, "status": "PAID", "payments": {}}
+        return resp
+
+    with patch("httpx.AsyncClient.get", side_effect=mock_get_inv) as mock_get:
+        updated = await reconcile_invoices_with_paypal(force=True, client=mock_client, db_path=db_path)
+        # Should have updated the 6 SENT invoices to PAID
+        assert len(updated) == 6
+        # Final invoices should never have been queried on PayPal
+        called_urls = [call.args[0] for call in mock_get.call_args_list]
+        assert not any("INV-FINAL-PAID" in url for url in called_urls)
+        assert not any("INV-FINAL-CANCELLED" in url for url in called_urls)
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_503_warning(mock_client, tmp_path):
+    from app.db import init_db, upsert_invoice
+    from app.paypal.invoices import reconcile_invoices_with_paypal
+    import app.paypal.invoices as inv_mod
+
+    db_path = str(tmp_path / "test_503.db")
+    init_db(db_path)
+    inv_mod._last_reconciliation_time = 0.0
+
+    upsert_invoice("INV-503", "user@test.com", "Task", 100.0, "SENT", db_path=db_path)
+
+    mock_resp = MagicMock()
+    mock_resp.is_error = True
+    mock_resp.status_code = 503
+    mock_resp.text = "Service Unavailable"
+    mock_resp.json.side_effect = Exception("Not json")
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_resp
+        # Should not crash on 503, should log warning and return cleanly
+        updated = await reconcile_invoices_with_paypal(force=True, client=mock_client, db_path=db_path)
+        assert len(updated) == 0
+

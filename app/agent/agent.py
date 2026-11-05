@@ -176,27 +176,31 @@ async def run_agent(
                     "content": json.dumps(res),
                 })
             except PayPalAPIError as pperr:
+                logger.exception(f"PayPalAPIError executing tool '{fn_name}': {pperr}")
+                error_msg = f"PayPal error {pperr.status_code}: {pperr.response_body}"
                 err_dict = {
                     "error": "PayPalAPIError",
                     "status_code": pperr.status_code,
                     "details": pperr.response_body,
-                    "message": str(pperr),
+                    "message": error_msg,
                 }
                 actions_taken.append({"tool": fn_name, "input": fn_args, "error": err_dict})
                 history.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "name": fn_name,
-                    "content": json.dumps(err_dict),
+                    "content": error_msg,
                 })
             except Exception as err:
+                logger.exception(f"Unhandled exception executing tool '{fn_name}': {err}")
+                error_msg = f"Tool '{fn_name}' failed ({type(err).__name__}): {str(err)}"
                 err_dict = {"error": type(err).__name__, "message": str(err)}
                 actions_taken.append({"tool": fn_name, "input": fn_args, "error": err_dict})
                 history.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "name": fn_name,
-                    "content": json.dumps(err_dict),
+                    "content": error_msg,
                 })
 
     fallback_reply = "I completed the available actions."

@@ -151,6 +151,10 @@ async def tool_create_and_send_invoice(
         note=note,
     )
     invoice_id = draft.get("id")
+    if not invoice_id and "href" in draft:
+        invoice_id = draft["href"].rstrip("/").split("/")[-1]
+        draft["id"] = invoice_id
+
     if not invoice_id:
         raise ValueError(f"PayPal did not return an invoice ID: {draft}")
 

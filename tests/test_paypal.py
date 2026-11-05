@@ -70,6 +70,28 @@ async def test_create_draft_invoice(mock_client):
 
 
 @pytest.mark.asyncio
+async def test_create_draft_invoice_extracts_id_from_href(mock_client):
+    mock_resp = MagicMock()
+    mock_resp.is_error = False
+    mock_resp.status_code = 201
+    mock_resp.json.return_value = {
+        "rel": "self",
+        "href": "https://api.sandbox.paypal.com/v2/invoicing/invoices/INV2-EXTRACT-9999",
+        "method": "GET"
+    }
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        res = await create_draft_invoice(
+            client_email="sarah@example.com",
+            description="Logo design",
+            amount=400.0,
+            client=mock_client,
+        )
+        assert res["id"] == "INV2-EXTRACT-9999"
+
+
+@pytest.mark.asyncio
 async def test_send_invoice(mock_client):
     mock_resp = MagicMock()
     mock_resp.is_error = False

@@ -77,7 +77,13 @@ async def create_draft_invoice(
     url = f"{api_client.base_url}/v2/invoicing/invoices"
     async with httpx.AsyncClient(timeout=30.0) as http:
         resp = await http.post(url, json=payload, headers=headers)
-        return await _handle_response(resp, "create_draft_invoice")
+        data = await _handle_response(resp, "create_draft_invoice")
+        # PayPal returns {"rel": "self", "href": "https://api.sandbox.paypal.com/v2/invoicing/invoices/INV2-...", "method": "GET"}
+        # If "id" is not already present, extract from the end of href:
+        if isinstance(data, dict):
+            if "id" not in data and "href" in data:
+                data["id"] = data["href"].rstrip("/").split("/")[-1]
+        return data
 
 
 async def send_invoice(

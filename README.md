@@ -40,7 +40,7 @@ Freelancers lose countless hours manually drafting invoices, checking bank balan
 | PayChase AI Backend                                                               |
 |                                                                                   |
 |  +---------------------------+                +--------------------------------+  |
-|  |     Anthropic LLM Agent   | <--- Tools --->|      PayPal Invoicing v2       |  |
+|  |   OpenAI-Compatible Agent | <--- Tools --->|      PayPal Invoicing v2       |  |
 |  |   - create_and_send       |                |  - POST /v2/invoicing/invoices |  |
 |  |   - list_invoices         |                |  - POST /invoices/{id}/send    |  |
 |  |   - get_status            |                |  - POST /invoices/{id}/remind  |  |
@@ -102,9 +102,14 @@ PAYPAL_SECRET=your_sandbox_secret
 PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
 PAYPAL_WEBHOOK_ID=your_optional_webhook_id
 
-# Anthropic LLM Credentials
-LLM_API_KEY=your_anthropic_api_key
-LLM_MODEL=claude-3-5-sonnet-20241022
+# LLM Credentials (OpenAI-compatible: OpenAI, Groq, OpenRouter, Together, Ollama)
+LLM_API_KEY=your_llm_api_key
+LLM_MODEL=gpt-4o-mini
+# LLM_BASE_URL=https://api.openai.com/v1
+# Free / Alternative Providers:
+# LLM_BASE_URL=https://api.groq.com/openai/v1
+# LLM_BASE_URL=https://openrouter.ai/api/v1
+# LLM_BASE_URL=http://localhost:11434/v1
 
 # App Configuration
 DEMO_MODE=true
@@ -172,7 +177,8 @@ This project adheres strictly to official PayPal Invoicing v2 specifications:
 
 ## 🤖 AI Agent & Tool Calling Architecture
 
-- **Engine**: Anthropic Python SDK with function calling (`tools` parameter).
+- **Engine**: OpenAI-compatible Python SDK with function calling (`type: "function"`). Supports OpenAI, Groq, OpenRouter, Together, Local Ollama, and other compatible providers via `LLM_BASE_URL`.
+- **Rate Limit Resilience**: Automatic retry with backoff and friendly user messaging on HTTP 429 rate limit responses.
 - **Session Memory**: In-memory conversational state per session (`session_id`).
 - **Prompt Safeguards**:
   - Currency strictly restricted to **USD ($)**.
@@ -219,3 +225,4 @@ This repository includes a [`render.yaml`](render.yaml) specification for 1-clic
 ## 📄 License
 
 This project is licensed under the terms of the [MIT License](LICENSE).
+

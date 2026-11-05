@@ -95,3 +95,4 @@ def test_get_unpaid_invoices(temp_db):
     assert "INV-1" in ids
     assert "INV-3" in ids
     assert "INV-2" not in ids
+

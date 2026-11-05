@@ -118,3 +118,4 @@ async def test_run_chaser_job_workflow(temp_db):
         # 4th run: reached max 3 reminders, no more should be sent
         actions5 = await run_chaser_job(demo_mode=True)
         assert len(actions5) == 0
+

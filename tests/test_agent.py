@@ -1,7 +1,10 @@
+import json
 import pytest
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
+from openai import RateLimitError
+import httpx
 from app.db import init_db, upsert_invoice
 from app.agent.tools import dispatch_tool
 from app.agent.agent import run_agent, clear_session_history
@@ -93,30 +96,51 @@ async def test_tool_cancel_invoice(temp_db):
 async def test_agent_tool_loop(temp_db):
     clear_session_history("test_session")
 
-    # Step 1: Mock model response containing tool_use block
-    tool_use_block = MagicMock()
-    tool_use_block.type = "tool_use"
-    tool_use_block.name = "list_invoices"
-    tool_use_block.id = "call_abc123"
-    tool_use_block.input = {"status": "SENT"}
+    # Step 1: Mock OpenAI model response containing tool_calls
+    tc = MagicMock()
+    tc.id = "call_abc123"
+    tc.function.name = "list_invoices"
+    tc.function.arguments = json.dumps({"status": "SENT"})
+
+    msg1 = MagicMock()
+    msg1.content = None
+    msg1.tool_calls = [tc]
 
     resp1 = MagicMock()
-    resp1.content = [tool_use_block]
-    resp1.stop_reason = "tool_use"
+    choice1 = MagicMock()
+    choice1.message = msg1
+    resp1.choices = [choice1]
 
-    # Step 2: Final response text block
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = "You have 0 pending sent invoices."
+    # Step 2: Final response text
+    msg2 = MagicMock()
+    msg2.content = "You have 0 pending sent invoices."
+    msg2.tool_calls = None
 
     resp2 = MagicMock()
-    resp2.content = [text_block]
-    resp2.stop_reason = "end_turn"
+    choice2 = MagicMock()
+    choice2.message = msg2
+    resp2.choices = [choice2]
 
     mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=[resp1, resp2])
+    mock_client.chat.completions.create = AsyncMock(side_effect=[resp1, resp2])
 
     reply, actions = await run_agent("test_session", "List all my sent invoices", client=mock_client)
     assert reply == "You have 0 pending sent invoices."
     assert len(actions) == 1
     assert actions[0]["tool"] == "list_invoices"
+
+
+@pytest.mark.asyncio
+async def test_agent_rate_limit_handling(temp_db):
+    clear_session_history("test_rate_limit")
+
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(429, request=req)
+    rate_err = RateLimitError("Rate limit reached", response=resp, body=None)
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=rate_err)
+
+    reply, actions = await run_agent("test_rate_limit", "Invoice test", client=mock_client)
+    assert "rate limit reached" in reply.lower()
+    assert actions == []

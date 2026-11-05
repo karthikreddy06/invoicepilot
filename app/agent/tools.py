@@ -18,100 +18,115 @@ from app.paypal.invoices import (
 
 logger = logging.getLogger(__name__)
 
-# Anthropic Tool Definitions
+# OpenAI-compatible Function Calling Tools Schema
 TOOLS_SCHEMA = [
     {
-        "name": "create_and_send_invoice",
-        "description": "Create a new PayPal draft invoice and immediately send it to the client. Also stores the invoice in the local database.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "client_email": {
-                    "type": "string",
-                    "description": "The recipient's email address.",
+        "type": "function",
+        "function": {
+            "name": "create_and_send_invoice",
+            "description": "Create a new PayPal draft invoice and immediately send it to the client. Also stores the invoice in the local database.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client_email": {
+                        "type": "string",
+                        "description": "The recipient's email address.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed description of the services or goods delivered.",
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Total amount in USD.",
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "description": "Due date in YYYY-MM-DD format. Defaults to 15 days from now if omitted.",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Optional message or payment note to the client.",
+                    },
                 },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description of the services or goods delivered.",
-                },
-                "amount": {
-                    "type": "number",
-                    "description": "Total amount in USD.",
-                },
-                "due_date": {
-                    "type": "string",
-                    "description": "Due date in YYYY-MM-DD format. Defaults to 15 days from now if omitted.",
-                },
-                "note": {
-                    "type": "string",
-                    "description": "Optional message or payment note to the client.",
-                },
+                "required": ["client_email", "description", "amount"],
             },
-            "required": ["client_email", "description", "amount"],
         },
     },
     {
-        "name": "list_invoices",
-        "description": "List existing invoices from the database, optionally filtered by status (e.g. SENT, PAID, DRAFT, CANCELLED).",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "description": "Filter by invoice status: DRAFT, SENT, PAID, CANCELLED, or leave empty for all.",
+        "type": "function",
+        "function": {
+            "name": "list_invoices",
+            "description": "List existing invoices from the database, optionally filtered by status (e.g. SENT, PAID, DRAFT, CANCELLED).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "Filter by invoice status: DRAFT, SENT, PAID, CANCELLED, or leave empty for all.",
+                    },
                 },
+                "required": [],
             },
-            "required": [],
         },
     },
     {
-        "name": "get_invoice_status",
-        "description": "Fetch the latest status and details of a specific invoice by PayPal invoice ID, syncing with PayPal sandbox.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "invoice_id": {
-                    "type": "string",
-                    "description": "The PayPal invoice ID (e.g. INV2-XXXX-XXXX-XXXX-XXXX).",
+        "type": "function",
+        "function": {
+            "name": "get_invoice_status",
+            "description": "Fetch the latest status and details of a specific invoice by PayPal invoice ID, syncing with PayPal sandbox.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "invoice_id": {
+                        "type": "string",
+                        "description": "The PayPal invoice ID (e.g. INV2-XXXX-XXXX-XXXX-XXXX).",
+                    },
                 },
+                "required": ["invoice_id"],
             },
-            "required": ["invoice_id"],
         },
     },
     {
-        "name": "send_reminder",
-        "description": "Send a formal payment reminder to the client for an outstanding invoice.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "invoice_id": {
-                    "type": "string",
-                    "description": "The PayPal invoice ID.",
+        "type": "function",
+        "function": {
+            "name": "send_reminder",
+            "description": "Send a formal payment reminder to the client for an outstanding invoice.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "invoice_id": {
+                        "type": "string",
+                        "description": "The PayPal invoice ID.",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Custom reminder text or note to accompany the email reminder.",
+                    },
                 },
-                "note": {
-                    "type": "string",
-                    "description": "Custom reminder text or note to accompany the email reminder.",
-                },
+                "required": ["invoice_id"],
             },
-            "required": ["invoice_id"],
         },
     },
     {
-        "name": "cancel_invoice",
-        "description": "Cancel an existing invoice on PayPal and mark it as CANCELLED in the database.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "invoice_id": {
-                    "type": "string",
-                    "description": "The PayPal invoice ID to cancel.",
+        "type": "function",
+        "function": {
+            "name": "cancel_invoice",
+            "description": "Cancel an existing invoice on PayPal and mark it as CANCELLED in the database.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "invoice_id": {
+                        "type": "string",
+                        "description": "The PayPal invoice ID to cancel.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for cancellation.",
+                    },
                 },
-                "reason": {
-                    "type": "string",
-                    "description": "Reason for cancellation.",
-                },
+                "required": ["invoice_id"],
             },
-            "required": ["invoice_id"],
         },
     },
 ]

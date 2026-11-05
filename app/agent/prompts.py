@@ -20,3 +20,4 @@ Available tools:
 - send_reminder: Sends a polite payment reminder to the client.
 - cancel_invoice: Cancels an invoice.
 """
+

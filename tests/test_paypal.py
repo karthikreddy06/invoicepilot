@@ -149,3 +149,4 @@ async def test_paypal_error_handling(mock_client):
             await get_invoice("INVALID_ID", client=mock_client)
         assert exc_info.value.status_code == 404
         assert "RESOURCE_NOT_FOUND" in str(exc_info.value.response_body)
+

@@ -45,3 +45,4 @@ class HealthResponse(BaseModel):
     paypal_connected: bool
     database: str
     demo_mode: bool
+

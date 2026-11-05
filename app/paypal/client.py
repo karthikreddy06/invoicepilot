@@ -94,3 +94,4 @@ class PayPalClient:
 
 # Global default client instance
 paypal_client = PayPalClient()
+

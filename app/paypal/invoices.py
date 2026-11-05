@@ -188,3 +188,4 @@ async def cancel_invoice(
         resp = await http.post(url, json=payload, headers=headers)
         result = await _handle_response(resp, f"cancel_invoice({invoice_id})")
         return result or {"success": True, "invoice_id": invoice_id, "message": "Invoice cancelled successfully"}
+

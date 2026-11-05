@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -25,29 +26,35 @@ def test_env(monkeypatch):
 async def test_end_to_end_flow(test_env):
     client, db_path = test_env
 
-    # Step 1: Freelancer asks AI agent to invoice Sarah
-    mock_tool_call = MagicMock()
-    mock_tool_call.type = "tool_use"
-    mock_tool_call.name = "create_and_send_invoice"
-    mock_tool_call.id = "call_inv_1"
-    mock_tool_call.input = {
+    # Step 1: Freelancer asks AI agent to invoice Sarah (OpenAI tool call format)
+    tc = MagicMock()
+    tc.id = "call_inv_1"
+    tc.function.name = "create_and_send_invoice"
+    tc.function.arguments = json.dumps({
         "client_email": "sarah@example.com",
         "description": "Logo design",
         "amount": 400.0,
         "due_date": "2026-11-20",
-    }
+    })
 
+    msg1 = MagicMock()
+    msg1.content = None
+    msg1.tool_calls = [tc]
+    choice1 = MagicMock()
+    choice1.message = msg1
     resp1 = MagicMock()
-    resp1.content = [mock_tool_call]
+    resp1.choices = [choice1]
 
+    msg2 = MagicMock()
+    msg2.content = "I've created and sent invoice INV2-DEMO-999 to sarah@example.com for $400."
+    msg2.tool_calls = None
+    choice2 = MagicMock()
+    choice2.message = msg2
     resp2 = MagicMock()
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = "I've created and sent invoice INV2-DEMO-999 to sarah@example.com for $400."
-    resp2.content = [text_block]
+    resp2.choices = [choice2]
 
     mock_llm = MagicMock()
-    mock_llm.messages.create = AsyncMock(side_effect=[resp1, resp2])
+    mock_llm.chat.completions.create = AsyncMock(side_effect=[resp1, resp2])
 
     with patch("app.agent.agent.get_llm_client", return_value=mock_llm), \
          patch("app.agent.tools.create_draft_invoice", new_callable=AsyncMock) as mock_draft, \

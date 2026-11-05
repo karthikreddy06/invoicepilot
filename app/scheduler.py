@@ -202,3 +202,4 @@ def stop_scheduler() -> None:
     """Signal background chaser to stop."""
     global _stop_event
     _stop_event.set()
+

@@ -38,3 +38,4 @@ True agentic commerce is far more than slapping an LLM on top of a database. Rea
 - Multi-currency support (EUR, GBP, CAD) with automated conversion rates.
 - Multi-channel escalation: adding SMS (Twilio) and WhatsApp Business reminders alongside PayPal email notifications.
 - Multi-tenant OAuth for team agencies and independent contractor marketplaces.
+

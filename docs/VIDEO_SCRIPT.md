@@ -90,3 +90,4 @@ Before hitting record, ensure the following setup is complete:
 1. **Pacing:** Speak clearly and calmly; don't rush. The timings above include 20 seconds of breathing room.
 2. **Cursor Movement:** Use smooth, deliberate mouse movements. Pause for half a second before clicking buttons.
 3. **Zoom:** Use 110% or 125% browser zoom in Chrome so text, badges, and numbers are crisp on 1080p video.
+

@@ -79,3 +79,12 @@ python, fastapi, paypal-api, paypal-invoicing-v2, openai, groq, sqlite, httpx, p
    Run `pytest -v` to execute all 51 automated unit and integration tests.
 ```
 
+---
+
+## 5. Screenshots for Devpost Image Gallery (Order & Captions)
+
+1. `docs/screenshots/01-create-invoice.png` — *Create an invoice by chatting*
+2. `docs/screenshots/02-paid-dashboard.png` — *PAID with PayPal Settled and 3 reminders sent*
+3. `docs/screenshots/03-paypal-payment.png` — *The client pays in the PayPal sandbox*
+
+

@@ -7,7 +7,14 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
 [![PayPal](https://img.shields.io/badge/PayPal-Sandbox%20Invoicing%20v2-0070ba.svg)](https://developer.paypal.com)
 
-![Dashboard](docs/screenshots/dashboard.png)
+### 1. Create an invoice by chatting
+![Create an invoice by chatting](docs/screenshots/01-create-invoice.png)
+
+### 2. PAID with PayPal Settled and 3 reminders sent
+![PAID with PayPal Settled and 3 reminders sent](docs/screenshots/02-paid-dashboard.png)
+
+### 3. The client pays in the PayPal sandbox
+![The client pays in the PayPal sandbox](docs/screenshots/03-paypal-payment.png)
 
 ---
 

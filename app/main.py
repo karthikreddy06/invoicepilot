@@ -67,6 +67,10 @@ static_path = Path(__file__).resolve().parent.parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
+docs_screenshots_path = Path(__file__).resolve().parent.parent / "docs" / "screenshots"
+if docs_screenshots_path.exists():
+    app.mount("/docs/screenshots", StaticFiles(directory=str(docs_screenshots_path)), name="screenshots")
+
 
 @app.get("/", include_in_schema=False)
 async def serve_index():
@@ -74,6 +78,14 @@ async def serve_index():
     if index_file.exists():
         return FileResponse(index_file)
     return {"message": "PayChase AI API is running. UI not found in /static."}
+
+
+@app.get("/welcome", include_in_schema=False)
+async def serve_landing():
+    landing_file = static_path / "landing.html"
+    if landing_file.exists():
+        return FileResponse(landing_file)
+    return {"message": "InvoicePilot landing page not found in /static."}
 
 
 @app.get("/health", response_model=HealthResponse)

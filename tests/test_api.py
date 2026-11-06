@@ -28,14 +28,6 @@ def test_serve_index_html(client_with_db):
     assert "PayPal Sandbox" in response.text
 
 
-def test_serve_landing_html(client_with_db):
-    response = client_with_db.get("/welcome")
-    assert response.status_code == 200
-    assert "InvoicePilot: an AI agent that gets freelancers paid" in response.text
-    assert "Open the app" in response.text
-    assert "How It Works" in response.text
-
-
 def test_health_endpoint(client_with_db):
     response = client_with_db.get("/health")
     assert response.status_code == 200

@@ -24,3 +24,7 @@ services:
         value: "true"
       - key: CHASER_INTERVAL_SECONDS
         value: "60"
+      - key: DEV_ADMIN_TOKEN
+        sync: false
+      - key: CHAT_RATE_LIMIT_PER_MINUTE
+        value: "20"

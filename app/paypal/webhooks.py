@@ -115,12 +115,14 @@ def handle_webhook_event(event: Dict[str, Any], db_path: Optional[str] = None) -
     invoice_id = extract_invoice_id_from_resource(resource)
 
     if not invoice_id:
+        if event_type in ("INVOICING.INVOICE.CREATED", "INVOICING.INVOICE.SENT") or event_type.endswith(".CREATED") or event_type.endswith(".SENT"):
+            logger.debug(f"Unhandled webhook event type: {event_type}")
+            return {"processed": False, "event_type": event_type, "reason": "Event type ignored"}
         logger.warning(f"Webhook event {event_type} received without invoice resource ID.")
         return {"processed": False, "reason": "No invoice ID in resource"}
 
-    logger.info(f"Processing webhook {event_type} for invoice {invoice_id}")
-
     if event_type == "INVOICING.INVOICE.PAID":
+        logger.info(f"Processing webhook {event_type} for invoice {invoice_id}")
         # Extract payment date if available from payments list
         paid_at = datetime.now(timezone.utc).isoformat()
         payments = resource.get("payments") or (resource.get("invoice", {}).get("payments") if isinstance(resource.get("invoice"), dict) else {})
@@ -133,12 +135,18 @@ def handle_webhook_event(event: Dict[str, Any], db_path: Optional[str] = None) -
         return {"processed": True, "event_type": event_type, "invoice_id": invoice_id, "status": "PAID", "invoice": inv}
 
     elif event_type == "INVOICING.INVOICE.CANCELLED":
+        logger.info(f"Processing webhook {event_type} for invoice {invoice_id}")
         inv = update_invoice_status(invoice_id, status="CANCELLED", is_simulated=0, db_path=db_path)
         return {"processed": True, "event_type": event_type, "invoice_id": invoice_id, "status": "CANCELLED", "invoice": inv}
 
     elif event_type == "INVOICING.INVOICE.REFUNDED":
+        logger.info(f"Processing webhook {event_type} for invoice {invoice_id}")
         inv = update_invoice_status(invoice_id, status="REFUNDED", is_simulated=0, db_path=db_path)
         return {"processed": True, "event_type": event_type, "invoice_id": invoice_id, "status": "REFUNDED", "invoice": inv}
+
+    elif event_type in ("INVOICING.INVOICE.CREATED", "INVOICING.INVOICE.SENT") or event_type.endswith(".CREATED") or event_type.endswith(".SENT"):
+        logger.debug(f"Unhandled webhook event type: {event_type}")
+        return {"processed": False, "event_type": event_type, "reason": "Event type ignored"}
 
     else:
         logger.info(f"Unhandled webhook event type: {event_type}")

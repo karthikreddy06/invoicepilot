@@ -1,10 +1,12 @@
-import logging
-import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
+import secrets
+import time
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, status, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -86,7 +88,56 @@ async def health_check():
     )
 
 
-@app.post("/chat", response_model=ChatResponse)
+# ------------------------------------------------------------------------------
+# Rate Limiting for /chat
+# ------------------------------------------------------------------------------
+_chat_rate_limit_records: Dict[str, List[float]] = defaultdict(list)
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP, taking X-Forwarded-For into account when present."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
+def reset_chat_rate_limiter():
+    """Reset rate limiter state (used in testing)."""
+    _chat_rate_limit_records.clear()
+
+
+async def check_chat_rate_limit(request: Request):
+    """
+    Enforce simple per-IP rate limiting on /chat (default: 20 requests per minute).
+    Returns 429 Too Many Requests if rate is exceeded.
+    """
+    limit = getattr(settings, "CHAT_RATE_LIMIT_PER_MINUTE", 20)
+    if limit <= 0:
+        return
+
+    client_ip = get_client_ip(request)
+    now = time.time()
+    window = 60.0
+
+    # Prune timestamps older than 60 seconds
+    timestamps = [t for t in _chat_rate_limit_records[client_ip] if now - t < window]
+    if len(timestamps) >= limit:
+        _chat_rate_limit_records[client_ip] = timestamps
+        logger.warning(f"Rate limit exceeded on /chat for IP {client_ip} ({len(timestamps)}/{limit} rpm)")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded: maximum {limit} requests per minute for /chat. Please try again later.",
+            headers={"Retry-After": "60"},
+        )
+
+    timestamps.append(now)
+    _chat_rate_limit_records[client_ip] = timestamps
+
+
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(check_chat_rate_limit)])
 async def chat_endpoint(payload: ChatRequest):
     """
     Process freelancer's natural language request through the AI agent with PayPal tool calling.
@@ -166,7 +217,60 @@ async def paypal_webhook_endpoint(request: Request):
 # DEV / DEMO ENDPOINTS
 # ==============================================================================
 
-@app.post("/dev/simulate-paid/{invoice_id}")
+LOCALHOST_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def is_localhost_request(request: Request) -> bool:
+    """Check if request originates from localhost, accounting for proxies."""
+    client_host = request.client.host if request.client else None
+    if client_host not in LOCALHOST_HOSTS:
+        return False
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        forwarded_ip = forwarded.split(",")[0].strip()
+        if forwarded_ip not in ("127.0.0.1", "::1", "localhost"):
+            return False
+
+    return True
+
+
+async def verify_dev_access(request: Request):
+    """
+    Protect dev endpoints: /dev/reset and /dev/simulate-paid must only work for
+    requests from localhost (127.0.0.1) or when a DEV_ADMIN_TOKEN env var is sent in a
+    header, and return 403 otherwise.
+    """
+    if is_localhost_request(request):
+        return True
+
+    # Check for DEV_ADMIN_TOKEN in request headers
+    dev_token = getattr(settings, "DEV_ADMIN_TOKEN", None)
+    provided_token = (
+        request.headers.get("x-dev-admin-token")
+        or request.headers.get("dev-admin-token")
+        or request.headers.get("dev_admin_token")
+        or request.headers.get("x-admin-token")
+    )
+    if not provided_token:
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            provided_token = auth[7:].strip()
+        elif auth and not auth.lower().startswith("basic "):
+            provided_token = auth.strip()
+
+    if dev_token and provided_token and secrets.compare_digest(provided_token.strip(), dev_token.strip()):
+        return True
+
+    client_str = request.client.host if request.client else "unknown"
+    logger.warning(f"Forbidden access attempt to dev endpoint {request.url.path} from {client_str}")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Forbidden: dev endpoints only accessible from localhost (127.0.0.1) or with DEV_ADMIN_TOKEN header.",
+    )
+
+
+@app.post("/dev/simulate-paid/{invoice_id}", dependencies=[Depends(verify_dev_access)])
 async def simulate_paid_endpoint(invoice_id: str):
     """
     [DEV ONLY] Simulates client paying an invoice for local testing.
@@ -190,7 +294,7 @@ async def simulate_paid_endpoint(invoice_id: str):
     }
 
 
-@app.post("/dev/reset")
+@app.post("/dev/reset", dependencies=[Depends(verify_dev_access)])
 async def dev_reset_endpoint():
     """
     [DEV ONLY] Clears all tracked invoices and reminders from the database for a clean demo run.
@@ -203,7 +307,7 @@ async def dev_reset_endpoint():
     }
 
 
-@app.post("/dev/trigger-chaser")
+@app.post("/dev/trigger-chaser", dependencies=[Depends(verify_dev_access)])
 async def dev_trigger_chaser_endpoint():
     """
     [DEV ONLY] Immediately triggers the background chaser job without waiting for the 60s timer.

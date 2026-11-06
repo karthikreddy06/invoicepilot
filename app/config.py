@@ -25,5 +25,9 @@ class Settings:
     CHASER_INTERVAL_SECONDS: int = int(os.getenv("CHASER_INTERVAL_SECONDS", "60"))
     PORT: int = int(os.getenv("PORT", "8000"))
 
+    # Security & Rate Limiting
+    DEV_ADMIN_TOKEN: Optional[str] = os.getenv("DEV_ADMIN_TOKEN") or None
+    CHAT_RATE_LIMIT_PER_MINUTE: int = int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "20"))
+
 
 settings = Settings()

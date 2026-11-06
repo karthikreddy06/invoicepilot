@@ -1,14 +1,16 @@
-import pytest
+import logging
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
+import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+from app.main import app, reset_chat_rate_limiter
 from app.db import init_db, upsert_invoice, get_invoice_by_paypal_id
 
 
 @pytest.fixture
 def client_with_db(monkeypatch):
+    reset_chat_rate_limiter()
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     init_db(path)
@@ -275,3 +277,106 @@ def test_sync_with_paypal_endpoint(client_with_db):
         assert inv["status"] == "PAID"
         assert inv["paid_at"] == "2026-11-05T18:00:00Z"
         assert inv["is_simulated"] == 0
+
+
+def test_chat_endpoint_rate_limit(client_with_db):
+    """Confirm per-IP rate limiting allows 20 requests per minute and blocks the 21st."""
+    reset_chat_rate_limiter()
+    with patch("app.main.run_agent", new_callable=AsyncMock) as mock_agent:
+        mock_agent.return_value = ("Ack", [])
+        payload = {"session_id": "rate_test", "message": "hello"}
+        headers_ip1 = {"X-Forwarded-For": "198.51.100.1"}
+
+        # 20 requests succeed
+        for i in range(20):
+            res = client_with_db.post("/chat", json=payload, headers=headers_ip1)
+            assert res.status_code == 200, f"Request {i+1} failed"
+
+        # 21st request from same IP is rate limited
+        res21 = client_with_db.post("/chat", json=payload, headers=headers_ip1)
+        assert res21.status_code == 429
+        assert "Rate limit exceeded" in res21.json()["detail"]
+        assert res21.headers.get("retry-after") == "60"
+
+        # A different IP is NOT blocked (per-IP rate limit)
+        headers_ip2 = {"X-Forwarded-For": "198.51.100.2"}
+        res_ip2 = client_with_db.post("/chat", json=payload, headers=headers_ip2)
+        assert res_ip2.status_code == 200
+
+
+def test_dev_endpoints_protected_from_external_ip_without_token(client_with_db):
+    """Dev endpoints return 403 Forbidden when called from non-localhost without DEV_ADMIN_TOKEN."""
+    external_headers = {"X-Forwarded-For": "203.0.113.195"}
+
+    # /dev/reset
+    res_reset = client_with_db.post("/dev/reset", headers=external_headers)
+    assert res_reset.status_code == 403
+    assert "Forbidden" in res_reset.json()["detail"]
+
+    # /dev/simulate-paid/{id}
+    res_sim = client_with_db.post("/dev/simulate-paid/INV-999", headers=external_headers)
+    assert res_sim.status_code == 403
+    assert "Forbidden" in res_sim.json()["detail"]
+
+    # /dev/trigger-chaser
+    res_chaser = client_with_db.post("/dev/trigger-chaser", headers=external_headers)
+    assert res_chaser.status_code == 403
+    assert "Forbidden" in res_chaser.json()["detail"]
+
+
+def test_dev_endpoints_allowed_with_dev_admin_token(client_with_db, monkeypatch):
+    """Dev endpoints return 200 when called with a valid DEV_ADMIN_TOKEN header from external IP."""
+    monkeypatch.setattr("app.config.settings.DEV_ADMIN_TOKEN", "super-secret-admin-key")
+    external_ip = {"X-Forwarded-For": "203.0.113.195"}
+
+    # With correct X-Dev-Admin-Token
+    headers_valid = {**external_ip, "X-Dev-Admin-Token": "super-secret-admin-key"}
+    res_reset = client_with_db.post("/dev/reset", headers=headers_valid)
+    assert res_reset.status_code == 200
+    assert res_reset.json()["dev_mode"] is True
+
+    # With Authorization: Bearer token
+    headers_bearer = {**external_ip, "Authorization": "Bearer super-secret-admin-key"}
+    res_chaser = client_with_db.post("/dev/trigger-chaser", headers=headers_bearer)
+    assert res_chaser.status_code == 200
+
+    # With invalid token
+    headers_invalid = {**external_ip, "X-Dev-Admin-Token": "wrong-secret"}
+    res_invalid = client_with_db.post("/dev/reset", headers=headers_invalid)
+    assert res_invalid.status_code == 403
+
+
+def test_webhook_invoice_created_and_sent_debug_log(client_with_db, caplog):
+    """Verify that CREATED and SENT webhook events are logged at DEBUG level, not INFO or WARNING."""
+    with patch("app.main.verify_webhook_signature", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = True
+
+        with caplog.at_level(logging.DEBUG):
+            # Test CREATED event
+            res_created = client_with_db.post("/webhooks/paypal", json={
+                "id": "WH-CREATED-1",
+                "event_type": "INVOICING.INVOICE.CREATED",
+                "resource": {"id": "INV2-NEW-1"}
+            })
+            assert res_created.status_code == 200
+            assert res_created.json()["result"]["processed"] is False
+
+            # Test SENT event
+            res_sent = client_with_db.post("/webhooks/paypal", json={
+                "id": "WH-SENT-1",
+                "event_type": "INVOICING.INVOICE.SENT",
+                "resource": {"id": "INV2-NEW-1"}
+            })
+            assert res_sent.status_code == 200
+            assert res_sent.json()["result"]["processed"] is False
+
+            # Verify log records: must be DEBUG level for "Unhandled webhook event type"
+            unhandled_records = [
+                rec for rec in caplog.records
+                if "Unhandled webhook event type" in rec.message
+            ]
+            assert len(unhandled_records) >= 2
+            for rec in unhandled_records:
+                assert rec.levelno == logging.DEBUG
+                assert rec.levelname == "DEBUG"
+

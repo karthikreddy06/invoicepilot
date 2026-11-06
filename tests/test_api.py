@@ -237,16 +237,60 @@ def test_dev_simulate_paid(client_with_db):
 
 
 def test_dev_reset_endpoint(client_with_db):
+    from app.agent.agent import _sessions
+    _sessions["test_session_123"] = [{"role": "user", "content": "hi"}]
+
     upsert_invoice("INV-RESET-1", "user@test.com", "Test", 100.0, "SENT")
     response = client_with_db.post("/dev/reset")
     assert response.status_code == 200
     data = response.json()
     assert data["dev_mode"] is True
     assert data["result"]["success"] is True
+    assert data.get("chat_sessions_cleared") is True
 
-    # Confirm database is empty
+    # Confirm database is empty and chat sessions are cleared
     invoices = client_with_db.get("/invoices").json()
     assert len(invoices) == 0
+    assert len(_sessions) == 0
+
+
+def test_reconciliation_overwrites_simulated_paid_when_paypal_unpaid(client_with_db):
+    """Confirm reconciliation overwrites simulated-paid status when PayPal reports invoice is still SENT."""
+    import app.paypal.invoices as inv_mod
+    inv_mod._last_reconciliation_time = 0.0
+
+    upsert_invoice(
+        paypal_invoice_id="INV2-SIM-RESET",
+        client_email="client@test.com",
+        description="Design work",
+        amount=400.0,
+        status="SENT",
+    )
+
+    # 1. Mark as simulated paid
+    res_sim = client_with_db.post("/dev/simulate-paid/INV2-SIM-RESET")
+    assert res_sim.status_code == 200
+    inv = get_invoice_by_paypal_id("INV2-SIM-RESET")
+    assert inv["status"] == "PAID"
+    assert inv["is_simulated"] == 1
+    assert inv["paid_at"] is not None
+
+    # 2. Reconcile with PayPal Sandbox (which says it's actually SENT, not paid)
+    with patch("app.paypal.invoices.get_invoice", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = {
+            "id": "INV2-SIM-RESET",
+            "status": "SENT",
+        }
+
+        res_sync = client_with_db.post("/invoices/sync")
+        assert res_sync.status_code == 200
+        assert res_sync.json()["reconciled_count"] == 1
+
+        # Confirm DB was overwritten with PayPal ground truth
+        inv_after = get_invoice_by_paypal_id("INV2-SIM-RESET")
+        assert inv_after["status"] == "SENT"
+        assert inv_after["is_simulated"] == 0
+        assert inv_after["paid_at"] is None
 
 
 def test_sync_with_paypal_endpoint(client_with_db):

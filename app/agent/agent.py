@@ -29,6 +29,11 @@ def clear_session_history(session_id: str) -> None:
         _sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
 
+def clear_all_sessions() -> None:
+    """Clear all in-memory agent chat sessions."""
+    _sessions.clear()
+
+
 def get_llm_client() -> Optional[AsyncOpenAI]:
     if not settings.LLM_API_KEY:
         return None

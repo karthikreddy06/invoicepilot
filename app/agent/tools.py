@@ -14,6 +14,7 @@ from app.paypal.invoices import (
     get_invoice,
     send_reminder as pp_send_reminder,
     cancel_invoice as pp_cancel_invoice,
+    delete_draft_invoice,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,10 +159,20 @@ async def tool_create_and_send_invoice(
     if not invoice_id:
         raise ValueError(f"PayPal did not return an invoice ID: {draft}")
 
-    # Step 2: Send invoice
-    await send_invoice(invoice_id)
+    # Step 2: Send invoice (with automatic cleanup of orphan draft if sending fails)
+    try:
+        await send_invoice(invoice_id)
+    except Exception as send_err:
+        logger.error(
+            f"Failed to send draft invoice {invoice_id}: {send_err}. Deleting draft to prevent orphan."
+        )
+        try:
+            await delete_draft_invoice(invoice_id)
+        except Exception as del_err:
+            logger.warning(f"Could not delete orphan draft invoice {invoice_id}: {del_err}")
+        raise send_err
 
-    # Step 3: Record in local database
+    # Step 3: Record in local database (only stored if send succeeded)
     record = upsert_invoice(
         paypal_invoice_id=invoice_id,
         client_email=client_email,

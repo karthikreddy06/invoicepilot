@@ -44,6 +44,31 @@ async def test_tool_create_and_send_invoice(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_tool_create_and_send_invoice_send_failure_cleans_up_draft(temp_db):
+    from app.db import get_invoice_by_paypal_id
+    with patch("app.agent.tools.create_draft_invoice", new_callable=AsyncMock) as mock_draft, \
+         patch("app.agent.tools.send_invoice", new_callable=AsyncMock) as mock_send, \
+         patch("app.agent.tools.delete_draft_invoice", new_callable=AsyncMock) as mock_delete:
+        mock_draft.return_value = {"id": "INV2-FAIL-CLEAN", "status": "DRAFT"}
+        mock_send.side_effect = Exception("PayPal network error on /send")
+        mock_delete.return_value = True
+
+        with pytest.raises(Exception, match="PayPal network error on /send"):
+            await dispatch_tool("create_and_send_invoice", {
+                "client_email": "fail@test.com",
+                "description": "Failing send task",
+                "amount": 250.0,
+            })
+
+        mock_draft.assert_called_once()
+        mock_send.assert_called_once_with("INV2-FAIL-CLEAN")
+        mock_delete.assert_called_once_with("INV2-FAIL-CLEAN")
+
+        # Verify draft was NOT stored in database
+        assert get_invoice_by_paypal_id("INV2-FAIL-CLEAN", db_path=temp_db) is None
+
+
+@pytest.mark.asyncio
 async def test_tool_list_invoices(temp_db):
     upsert_invoice("INV-A", "a@test.com", "Design", 200.0, "SENT", db_path=temp_db)
     upsert_invoice("INV-B", "b@test.com", "Copywriting", 300.0, "PAID", db_path=temp_db)

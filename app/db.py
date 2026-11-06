@@ -112,6 +112,9 @@ def update_invoice_status(
         if paid_at is not None:
             clauses.append("paid_at = ?")
             params.append(paid_at)
+        elif status.upper() != "PAID":
+            # If transitioning out of PAID, clear paid_at timestamp
+            clauses.append("paid_at = NULL")
 
         if is_simulated is not None:
             clauses.append("is_simulated = ?")
@@ -171,14 +174,15 @@ def get_all_invoices(
 
 def get_non_final_invoices(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Get all active invoices that are not in a final PayPal state (PAID, CANCELLED, REFUNDED).
-    These need periodic reconciliation with PayPal's live status.
+    Get all active invoices that are not in a final PayPal state (PAID, CANCELLED, REFUNDED),
+    plus any invoices simulated as paid locally that require verification with PayPal.
     """
     with get_db_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM invoices
             WHERE UPPER(status) IN ('SENT', 'UNPAID', 'DRAFT', 'PARTIALLY_PAID', 'SCHEDULED')
+               OR is_simulated = 1
             ORDER BY id ASC
         """)
         rows = cursor.fetchall()

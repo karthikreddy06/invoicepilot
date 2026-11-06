@@ -1152,6 +1152,9 @@
 
     // Dev simulate paid
     async function simulatePaid(invoiceId) {
+      if (!confirm("This only changes your local dashboard, not PayPal")) {
+        return;
+      }
       try {
         const res = await fetch(`/dev/simulate-paid/${invoiceId}`, { method: "POST" });
         if (!res.ok) throw new Error("Simulation failed");
@@ -1184,7 +1187,8 @@
       try {
         const res = await fetch("/dev/reset", { method: "POST" });
         if (!res.ok) throw new Error("Failed to reset database");
-        showToast("Database reset: All invoices and reminders cleared.");
+        showToast("Database reset: All invoices, reminders, and chat sessions cleared.");
+        clearChat();
         fetchInvoices();
       } catch (err) {
         showToast("Error resetting database: " + err.message);

@@ -174,6 +174,21 @@ async def test_paypal_error_handling(mock_client):
 
 
 @pytest.mark.asyncio
+async def test_delete_draft_invoice(mock_client):
+    from app.paypal.invoices import delete_draft_invoice
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 204
+
+    with patch("httpx.AsyncClient.delete", new_callable=AsyncMock) as mock_delete:
+        mock_delete.return_value = mock_resp
+        res = await delete_draft_invoice("INV2-DRAFT-123", client=mock_client)
+        assert res is True
+        mock_delete.assert_called_once()
+        assert "INV2-DRAFT-123" in mock_delete.call_args[0][0]
+
+
+@pytest.mark.asyncio
 async def test_reconciliation_minimum_interval_and_force(mock_client, tmp_path):
     import time
     from app.db import init_db, upsert_invoice

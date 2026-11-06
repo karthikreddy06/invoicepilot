@@ -206,6 +206,27 @@ async def cancel_invoice(
         return result or {"success": True, "invoice_id": invoice_id, "message": "Invoice cancelled successfully"}
 
 
+async def delete_draft_invoice(
+    invoice_id: str,
+    client: Optional[Any] = None,
+) -> bool:
+    """
+    Delete a draft invoice on PayPal (DELETE /v2/invoicing/invoices/{id}).
+    Used to clean up orphan drafts if sending fails.
+    """
+    api_client = client or paypal_client
+    headers = await api_client.get_headers()
+    url = f"{api_client.base_url}/v2/invoicing/invoices/{invoice_id}"
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        resp = await http.delete(url, headers=headers)
+        if resp.status_code in (200, 204):
+            logger.info(f"Successfully deleted orphan draft invoice {invoice_id}")
+            return True
+        logger.warning(f"Failed to delete draft invoice {invoice_id}: status={resp.status_code} body={resp.text}")
+        return False
+
+
 async def reconcile_invoices_with_paypal(
     force: bool = False,
     client: Optional[Any] = None,
@@ -216,7 +237,8 @@ async def reconcile_invoices_with_paypal(
     - Uses one shared async lock across the scheduler, GET /invoices, and the Sync button.
     - Enforces a minimum interval of 15 seconds (can be bypassed with force=True via Sync button).
     - Fetches invoices concurrently with asyncio.gather (max 5 at once).
-    - Skips invoices that are already final (PAID, CANCELLED, REFUNDED).
+    - Skips invoices that are already final (PAID, CANCELLED, REFUNDED), unless marked as simulated.
+    - Overwrites simulated-paid invoices with PayPal's real ground-truth status when unpaid.
     - Retains 503 Service Unavailable warning behavior.
     """
     global _last_reconciliation_time
@@ -248,9 +270,10 @@ async def reconcile_invoices_with_paypal(
         async def reconcile_single_invoice(inv: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             inv_id = inv["paypal_invoice_id"]
             current_status = (inv.get("status") or "").upper()
+            is_sim = bool(inv.get("is_simulated", 0))
 
-            # Skip invoices that are already final
-            if current_status in ("PAID", "CANCELLED", "REFUNDED"):
+            # Skip invoices that are already final (unless simulated-paid, which must verify real status)
+            if not is_sim and current_status in ("PAID", "CANCELLED", "REFUNDED"):
                 return None
 
             async with sem:
@@ -264,7 +287,7 @@ async def reconcile_invoices_with_paypal(
                     # PayPal statuses: DRAFT, SENT, SCHEDULED, PAID, MARKED_AS_PAID, CANCELLED, REFUNDED, PARTIALLY_PAID
                     mapped_status = "PAID" if remote_status in ("PAID", "MARKED_AS_PAID") else remote_status
 
-                    if mapped_status != current_status:
+                    if mapped_status != current_status or is_sim:
                         paid_at = None
                         if mapped_status == "PAID":
                             payments = remote_data.get("payments", {})
@@ -272,7 +295,7 @@ async def reconcile_invoices_with_paypal(
                             if transactions and "payment_date" in transactions[0]:
                                 paid_at = transactions[0]["payment_date"]
                             else:
-                                paid_at = datetime.now(timezone.utc).isoformat()
+                                paid_at = inv.get("paid_at") or datetime.now(timezone.utc).isoformat()
 
                         updated = update_invoice_status(
                             paypal_invoice_id=inv_id,
@@ -282,7 +305,9 @@ async def reconcile_invoices_with_paypal(
                             db_path=db_path,
                         )
                         if updated:
-                            logger.info(f"Reconciled invoice {inv_id}: {current_status} -> {mapped_status}")
+                            logger.info(
+                                f"Reconciled invoice {inv_id}: {current_status} (simulated={is_sim}) -> {mapped_status} (PayPal ground truth)"
+                            )
                             return updated
                     return None
                 except PayPalAPIError as exc:

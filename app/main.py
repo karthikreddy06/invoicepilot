@@ -21,7 +21,7 @@ from app.db import (
     clear_all_data,
 )
 from app.schemas import ChatRequest, ChatResponse, HealthResponse
-from app.agent.agent import run_agent
+from app.agent.agent import run_agent, clear_all_sessions
 from app.paypal.client import paypal_client
 from app.paypal.invoices import reconcile_invoices_with_paypal
 from app.paypal.webhooks import verify_webhook_signature, handle_webhook_event
@@ -297,13 +297,17 @@ async def simulate_paid_endpoint(invoice_id: str):
 @app.post("/dev/reset", dependencies=[Depends(verify_dev_access)])
 async def dev_reset_endpoint():
     """
-    [DEV ONLY] Clears all tracked invoices and reminders from the database for a clean demo run.
+    [DEV ONLY] Clears all tracked invoices and reminders from the database,
+    and clears all in-memory chat sessions in the agent for a clean demo run.
     """
     res = clear_all_data()
+    clear_all_sessions()
+    reset_chat_rate_limiter()
     return {
         "dev_mode": True,
         "warning": "DEV ONLY ENDPOINT - NOT FOR PRODUCTION",
         "result": res,
+        "chat_sessions_cleared": True,
     }
 
 

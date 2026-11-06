@@ -152,17 +152,18 @@ PayChase AI/
 │   ├── test_scheduler.py    # Chaser tone escalation & demo mode overdue logic
 │   └── test_integration.py  # End-to-end full workflow test
 ├── docs/
-│   ├── screenshots/         # UI screenshots (.gitkeep)
+│   ├── screenshots/         # UI screenshots (01-create, 02-paid, 03-paypal)
 │   ├── DEVPOST_DESCRIPTION.md
 │   ├── DEVPOST_FIELDS.md
 │   └── VIDEO_SCRIPT.md
-├── render.yaml              # 1-click cloud deployment blueprint
 ├── requirements.txt         # Core dependencies
 ├── .env.example             # Documented template for environment variables
 ├── .gitignore               # Strict exclusion of secrets, DBs, and caches
 ├── LICENSE                  # MIT License
 └── README.md                # Project documentation & judge walkthrough
 ```
+
+> **Hosting Note:** InvoicePilot is standard ASGI and can run on any host that supports Python and Uvicorn.
 
 ---
 
